@@ -1,0 +1,9 @@
+FROM quay.io/rhqp/deliverest:v0.0.6
+
+LABEL org.opencontainers.image.authors="CRCQE <devtools-crc-qe@redhat.com>"
+
+# Mandatory envs extending from deliverest
+ENV ASSETS_FOLDER=/opt/snc \
+    OS=linux 
+
+COPY run.sh ${ASSETS_FOLDER}/
