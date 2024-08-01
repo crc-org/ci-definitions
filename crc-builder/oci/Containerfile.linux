@@ -1,0 +1,21 @@
+#8.10
+FROM quay.io/almalinuxorg/8-minimal@sha256:6c50656775e5971f7fb5e0d0d5b17f246873408a67b571ef720b7c1324118433 
+
+ARG TARGETARCH
+
+LABEL org.opencontainers.image.authors="CodeReady Containers <devtools-cdk@redhat.com>"
+
+ENV GO_VERSION 1.21.11
+
+RUN microdnf -y install git make gcc libvirt-devel perl-Digest-SHA xz findutils diffutils tar \
+    && curl -Lo /tmp/${GO_VERSION}.tar.gz  https://go.dev/dl/go${GO_VERSION}.linux-${TARGETARCH}.tar.gz \
+    && tar -xzvf /tmp/${GO_VERSION}.tar.gz -C /usr/lib > /dev/null \
+    && ln -s /usr/lib/go/bin/go /usr/local/bin/go \
+    && curl -k -Lo /usr/local/bin/mc https://dl.min.io/client/mc/release/linux-${TARGETARCH}/mc \
+    && chmod +x /usr/local/bin/mc \
+    && rm /tmp/${GO_VERSION}.tar.gz
+    
+COPY lib/common.sh /usr/local/bin
+COPY lib/linux/entrypoint.sh /usr/local/bin/entrypoint.sh
+
+ENTRYPOINT entrypoint.sh

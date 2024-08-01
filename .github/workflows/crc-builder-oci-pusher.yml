@@ -1,0 +1,31 @@
+name: crc-builder-oci-pusher
+
+on:
+  workflow_run:
+    workflows: crc-builder-oci-builder
+    types:
+      - completed
+  
+jobs:
+  push:
+    name: push
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Download crc-builder-oci assets
+        id: download-gh-context-artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: crc-builder
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      - name: Build image for Release
+        run: |
+          ls -al
+    
+
+
+    

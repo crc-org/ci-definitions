@@ -1,0 +1,24 @@
+---
+apiVersion: tekton.dev/v1beta1
+kind: TaskRun
+metadata:
+  generateName: crc-builder-installer-windows-
+spec:
+  taskRef:
+    name: crc-builder-installer
+  params:
+  # - name: crc-scm
+  #   value: https://github.com/adrianriobo/crc.git
+  # - name: crc-scm-ref 
+  #   value: msi_hyperv_group
+  - name: platform
+    value: windows
+  - name: host-config-secret
+    value: host-windows-1-blr
+  - name: tray-url
+    value: https://github.com/crc-org/tray-electron/releases/download/1.2.9/crc-tray-windows.zip
+  timeout: 90m
+
+
+
+
