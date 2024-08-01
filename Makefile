@@ -10,7 +10,7 @@ include tools/tools.mk
 # 2 version
 # 3 context
 define tkn_template
-	sed -e 's%cimage%$(1)%g' -e 's%cversion%$(2)%g' $(3)/tkn/tpl/task.tpl.yaml > $(3)/tkn/task.yaml
+	sed -e 's%cimage%$(1)%g' -e 's%cversion%$(2)%g' $(3)/tkn/tpl/$(4).tpl.yaml > $(3)/tkn/$(4).yaml
 endef
 
 # Push task as bundle
@@ -84,8 +84,9 @@ endif
 	${CONTAINER_MANAGER} push $(IMAGE)-windows
 	${CONTAINER_MANAGER} push $(IMAGE)-darwin
 
-# tkn-create:
-# 	$(call tkn_creator,$(SNC_RUNNER),$(SNC_RUNNER_V),snc-runner)
+crc-builder-tkn-create:
+	$(call tkn_creator,$(CRC_BUILDER),$(CRC_BUILDER_V),crc-builder,crc-builder-installer)
+	$(call tkn_creator,$(CRC_BUILDER),$(CRC_BUILDER_V),crc-builder,crc-builder)
 
 # tkn-push: install-out-of-tree-tools
 # 	$(call tkn_pusher,$(SNC_RUNNER),$(SNC_RUNNER_V),snc-runner)

@@ -4,12 +4,12 @@ kind: Task
 metadata:
   name: crc-builder-installer
   labels:
-    app.kubernetes.io/version: "0.0.7"
+    app.kubernetes.io/version: "cversion"
     redhat.com/product: openshift-local
     dev.lifecycle.io/phase: build
     openshift-local.redhat.com/component: installer
   annotations:
-    tekton.dev/pipelines.minVersion: "0.24.x"
+    tekton.dev/pipelines.minVersion: "0.44.x"
     tekton.dev/categories: installer
     tekton.dev/tags: openshift-local, installer
     tekton.dev/displayName: "openshift local installer"
@@ -60,7 +60,8 @@ spec:
   
   steps:
   - name: crc-executable-builder
-    image: quay.io/rhqp/crc-builder:v0.0.7-$(params.os) 
+    # cimage and cversion values should be passed to the template
+    image: cimage:cversion-$(params.os) 
     imagePullPolicy: Always
     volumeMounts:
     - mountPath: /opt/host/

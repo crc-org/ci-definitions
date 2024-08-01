@@ -4,16 +4,16 @@ kind: Task
 metadata:
   name: crc-builder
   labels:
-    app.kubernetes.io/version: "0.0.6"
+    app.kubernetes.io/version: "cversion"
     redhat.com/product: openshift-local
     dev.lifecycle.io/phase: build
     openshift-local.redhat.com/component: binary
   annotations:
-    tekton.dev/pipelines.minVersion: "0.24.x"
+    tekton.dev/pipelines.minVersion: "0.44.x"
     tekton.dev/categories: binary
     tekton.dev/tags: openshift-local, binary, linux
     tekton.dev/displayName: "openshift local linux binary"
-    tekton.dev/platforms: "linux/amd64"
+    tekton.dev/platforms: "linux/amd64, linux/arm64"
 spec:
   description: >-
     This task will build openshift local binary for linux distributions 
@@ -25,16 +25,6 @@ spec:
     default: "''"
   - name: crc-scm-ref 
     default: main
-  - name: custom-bundle-version-variable
-    description: |
-      When building an installer based on a custom bundle it is required
-      to manipulate the Makefile to match the custom version. 
-      Current variables holding bundle version based on bundle type are 
-      * OPENSHIFT_VERSION
-      * PODMAN_VERSION
-    default: "''"
-  - name: custom-bundle-version
-    default: "''"
   - name: s3-url
   - name: s3-access-key
   - name: s3-secret-key
@@ -51,7 +41,8 @@ spec:
 
   steps:
   - name: build
-    image: quay.io/rhqp/crc-builder:v0.0.7-linux
+    # cimage and cversion values should be passed to the template
+    image: cimage:cversion-linux
     imagePullPolicy: Always
     script: |
         #!/bin/sh
@@ -68,12 +59,6 @@ spec:
         fi
         if [[ $(params.crc-scm-ref) != "" ]]; then
           CRC_SCM_REF=$(params.crc-scm-ref)
-        fi
-        if [[ $(params.custom-bundle-version-variable) != "" ]]; then
-          CUSTOM_BUNDLE_VERSION_VARIABLE=$(params.custom-bundle-version-variable)
-        fi
-        if [[ $(params.custom-bundle-version) != "" ]]; then
-          CUSTOM_BUNDLE_VERSION=$(params.custom-bundle-version)
         fi
         if [[ $(params.s3-folder-path) != "" ]]; then
           UPLOAD_PATH=$(params.s3-folder-path)
