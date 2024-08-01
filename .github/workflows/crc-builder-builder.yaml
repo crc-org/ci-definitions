@@ -1,0 +1,62 @@
+name: crc-builder-builder
+
+on:
+  push:
+    # If release-info is not changed we may override a version
+    tags: [ '*' ]       
+    paths: 
+      - '.github\/workflows\/crc-builder\/release-info' 
+  pull_request:
+    branches: [ main ]
+    paths: 
+      - 'crc-builder/**'
+      - '.github\/workflows\/crc-builder*' 
+
+jobs:
+  build:
+    name: build
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Prepare runner
+        shell: bash
+        run: |
+          sudo apt-get install -y qemu-user-static
+
+      - name: Build image for PR
+        if: ${{ github.event_name == 'pull_request' }}
+        env:
+          # CRC_BUILDER: ghcr.io/crc-org/ci-crc-builder
+          CRC_BUILDER: ghcr.io/adrianriobo/ci-crc-builder
+          CRC_BUILDER_V: pr-${{ github.event.number }}
+        run: |
+          make crc-builder-oci-build
+          make crc-builder-oci-save
+          echo "image=${SNC_RUNNER}:${SNC_RUNNER_V}" >> "$GITHUB_ENV"
+  
+      - name: Build image for Release
+        if: ${{ github.event_name == 'push' }}
+        run: |
+          make crc-builder-oci-build
+          make crc-builder-oci-save
+          echo "image=$(sed -n 1p crc-builder/release-info):v$(sed -n 2p crc-builder/release-info)" >> "$GITHUB_ENV"
+
+      - name: Create image metadata
+        run: |
+          echo ${{ env.image }} > crc-builder-image
+          echo ${{ github.event_name }} > crc-builder-build-event
+  
+      - name: Upload crc-builder
+        uses: actions/upload-artifact@v4
+        with:
+          name: crc-builder
+          path: crc-builder*
+
+
+
+
+
+
+     

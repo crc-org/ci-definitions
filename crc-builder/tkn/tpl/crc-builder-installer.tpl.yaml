@@ -1,0 +1,133 @@
+---
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: crc-builder-installer
+  labels:
+    app.kubernetes.io/version: "0.0.7"
+    redhat.com/product: openshift-local
+    dev.lifecycle.io/phase: build
+    openshift-local.redhat.com/component: installer
+  annotations:
+    tekton.dev/pipelines.minVersion: "0.24.x"
+    tekton.dev/categories: installer
+    tekton.dev/tags: openshift-local, installer
+    tekton.dev/displayName: "openshift local installer"
+    tekton.dev/platforms: "linux/amd64"
+spec:
+  description: >-
+    This task will build openshift local installers 
+
+  params:
+  - name: crc-scm
+    default: "''"
+  - name: crc-scm-pr
+    default: "''"
+  - name: crc-scm-ref 
+    default: main
+  - name: custom-bundle-version-variable
+    description: |
+      When building an installer based on a custom bundle it is required
+      to manipulate the Makefile to match the custom version. 
+      Current variables holding bundle version based on bundle type are 
+      * OPENSHIFT_VERSION
+      * PODMAN_VERSION
+    default: "''"
+  - name: custom-bundle-version
+    default: "''"
+  - name: os
+    description: valid values are macos and windows
+  - name: host-config-secret
+    description: secret holding a host config
+  - name: s3-url
+  - name: s3-access-key
+  - name: s3-secret-key
+  - name: s3-folder-path
+  - name: s3-download-url
+
+  results:
+  - name: downloadable-base-url
+    description: base url where the installer and the shasumfile can be downloaded
+  - name: distributable-name
+    description: distributable file name for the installer
+  - name: shasumfile
+    description: shasumfile name 
+
+  volumes:
+  - name: host-connection
+    secret:
+      secretName: $(params.host-config-secret)
+  
+  steps:
+  - name: crc-executable-builder
+    image: quay.io/rhqp/crc-builder:v0.0.7-$(params.os) 
+    imagePullPolicy: Always
+    volumeMounts:
+    - mountPath: /opt/host/
+      name: host-connection
+    script: |
+        #!/bin/sh
+
+        # Copy key to connect to machine
+        cp /opt/host/key id_rsa
+        chmod 600 id_rsa 
+
+        # Run builder on target machine
+        TARGET_HOST=$(cat /opt/host/host)
+        TARGET_HOST_USERNAME=$(cat /opt/host/user)
+        TARGET_HOST_KEY_PATH=id_rsa
+        # sanitizing permissions for the key
+        chmod 600 ${TARGET_HOST_KEY_PATH}
+
+        DATALAKE_URL=$(params.s3-url)
+        DATALAKE_ACCESS_KEY=$(params.s3-access-key)
+        DATALAKE_SECRET_KEY=$(params.s3-secret-key)
+        UPLOAD_PATH=$(params.s3-folder-path)
+
+        # Optionals
+        if [[ $(params.crc-scm) != "" ]]; then
+          CRC_SCM=$(params.crc-scm)
+        fi
+        if [[ $(params.crc-scm-pr) != "" ]]; then
+          PULL_REQUEST=$(params.crc-scm-pr)
+        fi
+        if [[ $(params.crc-scm-ref) != "" ]]; then
+          REF=$(params.crc-scm-ref)
+        fi
+        if [[ $(params.custom-bundle-version-variable) != "" ]]; then
+          CUSTOM_BUNDLE_VERSION_VARIABLE=$(params.custom-bundle-version-variable)
+        fi
+        if [[ $(params.custom-bundle-version) != "" ]]; then
+          CUSTOM_BUNDLE_VERSION=$(params.custom-bundle-version)
+        fi
+        
+        # set -exuo pipefail
+
+        # Build installer
+        . entrypoint.sh
+
+        echo -n "$(params.s3-download-url)" \
+          | tee $(results.downloadable-base-url.path)
+        case "$(params.os)" in
+        macos|darwin)
+          echo -n "crc-macos-installer.pkg" | tee $(results.distributable-name.path)
+          echo -n "crc-macos-installer.pkg.sha256sum" | tee $(results.shasumfile.path)
+          ;;
+        windows)
+          echo -n "crc-windows-installer.zip" | tee $(results.distributable-name.path)
+          echo -n "crc-windows-installer.zip.sha256sum" | tee $(results.shasumfile.path)
+          ;;
+        *)
+          echo -n "" | tee $(results.distributable-name.path)
+          echo -n "" | tee $(results.shasumfile.path)
+          ;;
+        esac
+
+    resources:      
+      requests:
+        memory: 150Mi
+        cpu: 90m
+      limits:
+        memory: 270Mi
+        cpu: 150m
+    timeout: 90m

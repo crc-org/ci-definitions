@@ -1,0 +1,54 @@
+name: snc-runner-builder
+
+on:
+  push:
+    tags: [ '*' ]       
+    paths:
+      - '.github\/workflows\/snc-runner\/release-info' 
+  pull_request:
+    branches: [ main ]
+    paths: 
+      - 'snc-runner/**'
+      - '.github\/workflows\/snc-runner*' 
+jobs:
+  build:
+    name: build
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build image for PR
+        if: ${{ github.event_name == 'pull_request' }}
+        env:
+          # SNC_RUNNER: ghcr.io/crc-org/ci-snc-runner
+          SNC_RUNNER: ghcr.io/adrianriobo/ci-snc-runner
+          SNC_RUNNER_V: pr-${{ github.event.number }}
+        run: |
+          make snc-runner-oci-build
+          make snc-runner-oci-save
+          echo "image=${SNC_RUNNER}:${SNC_RUNNER_V}" >> "$GITHUB_ENV"
+
+      - name: Build image for Release
+        if: ${{ github.event_name == 'push' }}
+        run: |
+          make snc-runner-oci-build
+          make snc-runner-oci-save
+          # Get values from release-info
+          echo "image=$(sed -n 1p snc-runner/release-info):v$(sed -n 2p snc-runner/release-info)" >> "$GITHUB_ENV"
+         
+      - name: Create image metadata
+        run: |
+          echo ${{ env.image }} > snc-runner-image
+          echo ${{ github.event_name }} > snc-runner-build-event
+
+      - name: Upload snc-runner
+        uses: actions/upload-artifact@v4
+        with:
+          name: snc-runner
+          path: snc-runner*
+
+      
+
+      
+ 

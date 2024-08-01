@@ -1,0 +1,28 @@
+FROM registry.access.redhat.com/ubi8/ubi-minimal as preparer
+
+ARG OS
+ENV OS ${OS}
+
+COPY lib/${OS}/builder/* /usr/local/crc-builder/
+COPY lib/${OS}/entrypoint.sh /usr/local/bin/entrypoint.sh
+
+RUN cd /usr/local/crc-builder && \ 
+    if [[ ${OS} == 'windows' ]]; then \
+        curl -k -LO https://dl.minio.io/client/mc/release/windows-amd64/mc.exe; \
+    else \
+        curl -k -LO https://dl.min.io/client/mc/release/darwin-amd64/mc; \
+        chmod +x mc; \
+    fi;
+
+FROM quay.io/rhqp/support-tools:v0.0.2
+
+LABEL org.opencontainers.image.authors="CodeReady Containers <devtools-cdk@redhat.com>"
+
+ENV PLATFORM ${PLATFORM}
+ENV BUILDER_RESOURCES "/usr/local/crc-builder"
+
+COPY --from=preparer /usr/local/crc-builder ${BUILDER_RESOURCES}
+COPY --from=preparer /usr/local/bin/entrypoint.sh /usr/local/bin
+COPY lib/common.sh /usr/local/bin
+
+ENTRYPOINT entrypoint.sh

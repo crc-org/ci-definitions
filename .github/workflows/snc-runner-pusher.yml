@@ -1,0 +1,57 @@
+name: snc-runner-pusher
+
+on:
+  workflow_run:
+    workflows: snc-runner-builder
+    types:
+      - completed
+  
+jobs:
+  push:
+    name: push
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Download snc-runner assets
+        id: download-gh-context-artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: snc-runner
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      - name: Get snc-runner build informaiton
+        run: |
+          echo "source_event=$(cat snc-runner-build-event)" >> "$GITHUB_ENV"
+          echo "image=$(cat snc-runner-image)" >> "$GITHUB_ENV"
+
+      - name: Log in to ghcr.io for PR
+        if: ${{ env.source_event == 'pull_request' }}
+        uses: redhat-actions/podman-login@v1
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Log in to ghcr.io
+        if: ${{ env.source_event == 'push' }}
+        uses: redhat-actions/podman-login@v1
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Loginquay.io
+        if: ${{ env.source_event == 'push' }}
+        uses: redhat-actions/podman-login@v1
+        with:
+          registry: quay.io
+          username: ${{ secrets.QUAY_IO_USERNAME }}
+          password: ${{ secrets.QUAY_IO_PASSWORD }}
+
+      - name: Push snc-runner
+        run: |
+          make snc-runner-oci-load
+          IMAGE=${{ env.image }} make snc-runner-oci-push
