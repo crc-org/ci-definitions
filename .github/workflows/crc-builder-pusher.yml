@@ -53,7 +53,7 @@ jobs:
       - name: Push crc-builder
         run: |
           podman load -i crc-builder-linux.tar 
-          podman manifest push ${{ env.image }}-linux
+          podman push ${{ env.image }}-linux
           podman load -i crc-builder-windows.tar
           podman push ${{ env.image }}-windows
           podman load -i crc-builder-darwin.tar

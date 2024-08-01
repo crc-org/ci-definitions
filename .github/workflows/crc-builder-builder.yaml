@@ -34,7 +34,7 @@ jobs:
         run: |
           make crc-builder-oci-build
           make crc-builder-oci-save
-          echo "image=${SNC_RUNNER}:${SNC_RUNNER_V}" >> "$GITHUB_ENV"
+          echo "image=${CRC_BUILDER}:${CRC_BUILDER_V}" >> "$GITHUB_ENV"
   
       - name: Build image for Release
         if: ${{ github.event_name == 'push' }}
