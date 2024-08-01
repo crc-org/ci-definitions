@@ -18,7 +18,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Build image for PR
+      - name: Build image for on pr event
         if: ${{ github.event_name == 'pull_request' }}
         env:
           # SNC_RUNNER: ghcr.io/crc-org/ci-snc-runner
@@ -30,7 +30,7 @@ jobs:
           echo "image=${SNC_RUNNER}" >> "$GITHUB_ENV"
           echo "tag=${SNC_RUNNER_V}" >> "$GITHUB_ENV"
 
-      - name: Build image for Release
+      - name: Build image on push (release) event
         if: ${{ github.event_name == 'push' }}
         run: |
           make snc-runner-oci-build
