@@ -1,0 +1,66 @@
+name: crc-builder-oci-builder
+
+on:
+  push:
+    # If release-info is not changed we may override a version
+    tags: [ '*' ]       
+    paths: 
+      - '.github\/workflows\/crc-builder\/release-info' 
+  pull_request:
+    branches: [ main ]
+    paths: 
+      - 'crc-builder/**'
+      - '.github\/workflows\/crc-builder*' 
+
+jobs:
+  build:
+    name: build
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Prepare runner
+        shell: bash
+        run: |
+          sudo apt-get install -y qemu-user-static
+
+      - name: Build image for PR
+        if: ${{ github.event_name == 'pull_request' }}
+        env:
+          CRC_BUILDER: ghcr.io/crc-org/ci-crc-builder
+          CRC_BUILDER_V: pr-${{ github.event.number }}
+        run: |
+          make crc-builder-oci-build
+          CRC_BUILDER_SAVE=crc-builder make crc-builder-oci-save
+          echo "CRC_BUILDER=${SNC_RUNNER}" >> "$GITHUB_ENV"
+          echo "CRC_BUILDER_V=${SNC_RUNNER_V}" >> "$GITHUB_ENV"
+  
+      - name: Build image for Release
+        if: ${{ github.event_name == 'push' }}
+        run: |
+          make crc-builder-oci-build
+          CRC_BUILDER_SAVE=crc-builder make crc-builder-oci-save
+          # Get values from release-info
+          CRC_BUILDER ?= $(sed -n 1p crc-builder/release-info)
+          CRC_BUILDER_V ?= v$(sed -n 2p crc-builder/release-info)
+          echo "CRC_BUILDER=${CRC_BUILDER}" >> "$GITHUB_ENV"
+          echo "CRC_BUILDER_V=${CRC_BUILDER_V}" >> "$GITHUB_ENV"
+
+      - name: Create image metadata
+        run: |
+          echo ${{ env.CRC_BUILDER }}:${{ env.CRC_BUILDER_V }} > crc-builder-info
+          echo ${{ github.event_name }} > crc-builder-build-event
+  
+      - name: Upload crc-builder
+        uses: actions/upload-artifact@v4
+        with:
+          name: crc-builder
+          path: crc-builder*
+
+
+
+
+
+
+     
