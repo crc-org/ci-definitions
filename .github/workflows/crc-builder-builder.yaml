@@ -54,6 +54,46 @@ jobs:
           name: crc-builder
           path: crc-builder*
 
+  tkn-check:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Template tkn for PR
+        if: ${{ github.event_name == 'pull_request' }}
+        env:
+          # CRC_BUILDER: ghcr.io/crc-org/ci-crc-builder
+          CRC_BUILDER: ghcr.io/adrianriobo/ci-crc-builder
+          CRC_BUILDER_V: pr-${{ github.event.number }}
+        run: |
+          make crc-builder-tkn-create
+
+      - name: Check tkn for release
+        if: ${{ github.event_name == 'push' }}
+        run: |
+          [ ! -f crc-builder/tkn/crc-builder-installer.yaml ] && exit 1
+          [ ! -f crc-builder/tkn/crc-builder.yaml ] && exit 1
+          # Check if version is in sync
+
+      - name: Create k8s Kind Cluster
+        uses: helm/kind-action@v1
+    
+        # https://docs.openshift.com/pipelines/1.15/about/op-release-notes.html
+      - name: Deploy min supported tekton version
+        run: kubectl apply -f https://storage.googleapis.com/tekton-releases/pipeline/previous/v0.44.5/release.yaml
+    
+      - name: Deploy tasks
+        run: |
+          kubectl apply -f crc-builder/tkn/crc-builder-installer.yaml
+          kubectl apply -f crc-builder/tkn/crc-builder.yaml
+
+      - name: Upload crc-builder-tkn
+        uses: actions/upload-artifact@v4
+        with:
+          name: crc-builder-tkn
+          path: crc-builder/tkn/crc-builder*
+
 
 
 

@@ -10,20 +10,12 @@ include tools/tools.mk
 # 2 version
 # 3 context
 define tkn_template
-	sed -e 's%cimage%$(1)%g' -e 's%cversion%$(2)%g' $(3)/tkn/tpl/task.tpl.yaml > $(3)/tkn/task.yaml
-endef
-
-# Push task as bundle
-# 1 image
-# 2 version
-# 3 context
-define tkn_push
-	$(TOOLS_BINDIR)/tkn bundle push $(1):$(2)-tkn -f $(3)/tkn/task.yaml
+	sed -e 's%cimage%$(1)%g' -e 's%cversion%$(2)%g' $(3)/tkn/tpl/$(4).tpl.yaml > $(3)/tkn/$(4).yaml
 endef
 
 #### snc-runner ####
 
-.PHONY: snc-runner-oci-build snc-runner-oci-save snc-runner-oci-load snc-runner-oci-push
+.PHONY: snc-runner-oci-build snc-runner-oci-save snc-runner-oci-load snc-runner-oci-push snc-runner-tkn-create snc-runner-tkn-push
 
 # Variables
 SNC_RUNNER ?= $(shell sed -n 1p snc-runner/release-info)
@@ -47,9 +39,19 @@ ifndef IMAGE
 endif
 	${CONTAINER_MANAGER} push $(IMAGE)
 
+snc-runner-tkn-create:
+	$(call tkn_template,$(SNC_RUNNER),$(SNC_RUNNER_V),snc-runner,task)
+
+snc-runner-tkn-push: install-out-of-tree-tools
+ifndef IMAGE
+	IMAGE = $(SNC_RUNNER):$(SNC_RUNNER_V)
+endif
+	$(TOOLS_BINDIR)/tkn bundle push $(IMAGE)-tkn \
+		-f snc-runner/tkn/task.yaml
+
 #### crc-builder ####
 
-.PHONY: crc-builder-oci-build crc-builder-oci-save crc-builder-oci-load crc-builder-oci-push
+.PHONY: crc-builder-oci-build crc-builder-oci-save crc-builder-oci-load crc-builder-oci-push crc-builder-tkn-create crc-builder-tkn-push
 
 # Registries and versions
 CRC_BUILDER ?= $(shell sed -n 1p crc-builder/release-info)
@@ -84,8 +86,15 @@ endif
 	${CONTAINER_MANAGER} push $(IMAGE)-windows
 	${CONTAINER_MANAGER} push $(IMAGE)-darwin
 
-# tkn-create:
-# 	$(call tkn_creator,$(SNC_RUNNER),$(SNC_RUNNER_V),snc-runner)
+crc-builder-tkn-create:
+	$(call tkn_template,$(CRC_BUILDER),$(CRC_BUILDER_V),crc-builder,crc-builder-installer)
+	$(call tkn_template,$(CRC_BUILDER),$(CRC_BUILDER_V),crc-builder,crc-builder)
 
-# tkn-push: install-out-of-tree-tools
-# 	$(call tkn_pusher,$(SNC_RUNNER),$(SNC_RUNNER_V),snc-runner)
+crc-builder-tkn-push: install-out-of-tree-tools
+ifndef IMAGE
+	IMAGE = $(CRC_BUILDER):$(CRC_BUILDER_V)
+endif
+	$(TOOLS_BINDIR)/tkn bundle push $(IMAGE)-tkn \
+		-f crc-builder/tkn/crc-builder-installer.yaml
+		-f crc-builder/tkn/crc-builder.yaml
+ 	

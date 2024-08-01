@@ -8,8 +8,6 @@ source ./common.sh
 
 # Execution is controlled based on ENVS:
 
-# CUSTOM_BUNDLE_VERSION_VARIABLE When build based on a custom bundle need to set type: PODMAN_VERSION or OPENSHIFT_VERSION
-# CUSTOM_BUNDLE_VERSION When build based on a custom bundle need to set version
 # CRC_SCM: Source code repository for crc
 # CRC_SCM_PR: Optional parameter to build an specific PR for crc
 # CRC_SCM_REF: Optional parameter to build an specific PR for crc
