@@ -49,7 +49,7 @@ endif
 
 #### crc-builder ####
 
-.PHONY: crc-builder-oci-build crc-builder-oci-save crc-builder-oci-load crc-builder-oci-push
+.PHONY: crc-builder-oci-build crc-builder-oci-save crc-builder-oci-load crc-builder-oci-push crc-builder-tkn-create
 
 # Registries and versions
 CRC_BUILDER ?= $(shell sed -n 1p crc-builder/release-info)
