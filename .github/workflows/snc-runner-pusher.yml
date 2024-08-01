@@ -53,5 +53,21 @@ jobs:
 
       - name: Push snc-runner
         run: |
-          make snc-runner-oci-load
-          IMAGE=${{ env.image }} make snc-runner-oci-push
+          podman load -i snc-runner.tar
+          podman push ${{ env.image }} 
+
+      - name: Download snc-runner-tkn assets
+        uses: actions/download-artifact@v4
+        with:
+          name: snc-runner-tkn
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      - name: Push snc-runner-tkn
+        env:
+          TKN_VERSION: '0.37.0'
+        run: |
+          curl -LO "https://github.com/tektoncd/cli/releases/download/v${TKN_VERSION}/tkn_${TKN_VERSION}_Linux_x86_64.tar.gz"
+          tar xvzf "tkn_${TKN_VERSION}_Linux_x86_64.tar.gz" tkn
+          ./tkn bundle push ${{ env.image }}-tkn \
+            -f task.yaml 

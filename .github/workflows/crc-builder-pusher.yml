@@ -15,7 +15,6 @@ jobs:
       packages: write
     steps:
       - name: Download crc-builder assets
-        id: download-gh-context-artifact
         uses: actions/download-artifact@v4
         with:
           name: crc-builder
@@ -36,7 +35,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Log in to ghcr.io
-        if: ${{ env.source_event == 'push' }}
+        if: ${{ env.source_event == 'pull_request' }}
         uses: redhat-actions/podman-login@v1
         with:
           registry: ghcr.io
@@ -53,5 +52,28 @@ jobs:
 
       - name: Push crc-builder
         run: |
-          make snc-runner-oci-load
-          IMAGE=${{ env.image }} make snc-runner-oci-push
+          podman load -i crc-builder-linux.tar 
+          podman manifest push ${{ env.image }}-linux
+          podman load -i crc-builder-windows.tar
+          podman push ${{ env.image }}-windows
+          podman load -i crc-builder-darwin.tar
+          podman push ${{ env.image }}-darwin
+
+      - name: Download crc-builder-tkn assets
+        uses: actions/download-artifact@v4
+        with:
+          name: crc-builder-tkn
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      - name: Push crc-builder-tkn
+        env:
+          TKN_VERSION: '0.37.0'
+        run: |
+          curl -LO "https://github.com/tektoncd/cli/releases/download/v${TKN_VERSION}/tkn_${TKN_VERSION}_Linux_x86_64.tar.gz"
+          tar xvzf "tkn_${TKN_VERSION}_Linux_x86_64.tar.gz" tkn
+          ./tkn bundle push ${{ env.image }}-tkn \
+            -f crc-builder-installer.yaml \
+            -f crc-builder.yaml
+
+      
