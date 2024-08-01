@@ -85,8 +85,8 @@ endif
 	${CONTAINER_MANAGER} push $(IMAGE)-darwin
 
 crc-builder-tkn-create:
-	$(call tkn_creator,$(CRC_BUILDER),$(CRC_BUILDER_V),crc-builder,crc-builder-installer)
-	$(call tkn_creator,$(CRC_BUILDER),$(CRC_BUILDER_V),crc-builder,crc-builder)
+	$(call tkn_template,$(CRC_BUILDER),$(CRC_BUILDER_V),crc-builder,crc-builder-installer)
+	$(call tkn_template,$(CRC_BUILDER),$(CRC_BUILDER_V),crc-builder,crc-builder)
 
 # tkn-push: install-out-of-tree-tools
 # 	$(call tkn_pusher,$(SNC_RUNNER),$(SNC_RUNNER_V),snc-runner)
