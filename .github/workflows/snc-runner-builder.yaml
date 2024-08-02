@@ -62,10 +62,11 @@ jobs:
         run: |
           make snc-runner-tkn-create
 
-      - name: Check tkn for release
-        if: ${{ github.event_name == 'push' }}
+      - name: Check tkn specs
         run: |
-          [ ! -f snc-runner/tkn/task.yaml ] && exit 1
+          if [[ ! -f snc-runner/tkn/task.yaml ]]; then 
+            exit 1
+          fi
           # Check if version is in sync
 
       - name: Create k8s Kind Cluster

@@ -65,11 +65,14 @@ jobs:
         run: |
           make crc-builder-tkn-create
 
-      - name: Check tkn for release
-        if: ${{ github.event_name == 'push' }}
+      - name: Check tkn specs
         run: |
-          [ ! -f crc-builder/tkn/crc-builder-installer.yaml ] && exit 1
-          [ ! -f crc-builder/tkn/crc-builder.yaml ] && exit 1
+          if [[ ! -f crc-builder/tkn/crc-builder-installer.yaml ]]; then 
+            exit 1
+          fi
+          if [[ ! -f crc-builder/tkn/crc-builder.yaml ]]; then 
+            exit 1
+          fi
           # Check if version is in sync
 
       - name: Create k8s Kind Cluster
