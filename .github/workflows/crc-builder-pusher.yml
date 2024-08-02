@@ -26,14 +26,6 @@ jobs:
           echo "source_event=$(cat crc-builder-build-event)" >> "$GITHUB_ENV"
           echo "image=$(cat crc-builder-image)" >> "$GITHUB_ENV"
 
-      - name: Log in to ghcr.io for PR
-        if: ${{ env.source_event == 'pull_request' }}
-        uses: redhat-actions/podman-login@v1
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Log in to ghcr.io
         if: ${{ env.source_event == 'pull_request' }}
         uses: redhat-actions/podman-login@v1

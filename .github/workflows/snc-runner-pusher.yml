@@ -35,15 +35,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Log in to ghcr.io
-        if: ${{ env.source_event == 'push' }}
-        uses: redhat-actions/podman-login@v1
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Loginquay.io
+      - name: Log in to quay.io
         if: ${{ env.source_event == 'push' }}
         uses: redhat-actions/podman-login@v1
         with:
