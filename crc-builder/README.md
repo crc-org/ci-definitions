@@ -1,5 +1,7 @@
 # CRC Builder
 
+TBD
+
 ## Modifications to the image
 
 Changes to `crc-builder/os/macos/builder/build.sh` require re-building and pushing the image to internal registry (ImageStream). Make sure the changes are pushed to some `mybranch` on your fork of the QE platform repo (`github.com/<your-username>/qe-platform`). Since the `crc-builder/manifests/buildconfig.yaml` will be guiding the build of the image, it needs to specify your branch on your fork as the source. 
