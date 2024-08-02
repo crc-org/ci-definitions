@@ -2,14 +2,13 @@ name: snc-runner-builder
 
 on:
   push:
-    tags: [ '*' ]       
+    tags: [ 'snc-runner-v*' ]       
     paths:
       - '.github\/workflows\/snc-runner\/release-info' 
   pull_request:
     branches: [ main ]
-    paths: 
-      - 'snc-runner/**'
-      - '.github\/workflows\/snc-runner*' 
+    paths: ['snc-runner/**', '.github\/workflows\/snc-runner*' ]
+
 jobs:
   build:
     name: build

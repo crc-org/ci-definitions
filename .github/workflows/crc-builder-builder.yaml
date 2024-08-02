@@ -2,16 +2,11 @@ name: crc-builder-builder
 
 on:
   push:
-    # If release-info is not changed we may override a version
-    tags: [ '*' ]       
-    paths: 
-      - '.github\/workflows\/crc-builder\/release-info' 
+    tags: [ 'crc-builder-v*' ]       
   pull_request:
     branches: [ main ]
-    paths: 
-      - 'crc-builder/**'
-      - '.github\/workflows\/crc-builder*' 
-
+    paths: ['crc-builder/**', '.github\/workflows\/crc-builder*' ]
+      
 jobs:
   build:
     name: build
