@@ -15,6 +15,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+        # Allow emulation for building multi arch images
       - name: Prepare runner
         shell: bash
         run: |
