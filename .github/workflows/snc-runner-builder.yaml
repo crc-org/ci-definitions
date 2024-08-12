@@ -20,8 +20,7 @@ jobs:
       - name: Build image for PR
         if: ${{ github.event_name == 'pull_request' }}
         env:
-          # SNC_RUNNER: ghcr.io/crc-org/ci-snc-runner
-          SNC_RUNNER: ghcr.io/adrianriobo/ci-snc-runner
+          SNC_RUNNER: ghcr.io/crc-org/ci-snc-runner
           SNC_RUNNER_V: pr-${{ github.event.number }}
         run: |
           make snc-runner-oci-build
@@ -56,8 +55,7 @@ jobs:
       - name: Template tkn for PR
         if: ${{ github.event_name == 'pull_request' }}
         env:
-          # CRC_BUILDER: ghcr.io/crc-org/ci-crc-builder
-          CRC_BUILDER: ghcr.io/adrianriobo/ci-snc-runner
+          CRC_BUILDER: ghcr.io/crc-org/ci-crc-builder
           CRC_BUILDER_V: pr-${{ github.event.number }}
         run: |
           make snc-runner-tkn-create

@@ -24,8 +24,7 @@ jobs:
       - name: Build image for PR
         if: ${{ github.event_name == 'pull_request' }}
         env:
-          # CRC_BUILDER: ghcr.io/crc-org/ci-crc-builder
-          CRC_BUILDER: ghcr.io/adrianriobo/ci-crc-builder
+          CRC_BUILDER: ghcr.io/crc-org/ci-crc-builder
           CRC_BUILDER_V: pr-${{ github.event.number }}
         run: |
           make crc-builder-oci-build
@@ -59,8 +58,7 @@ jobs:
       - name: Template tkn for PR
         if: ${{ github.event_name == 'pull_request' }}
         env:
-          # CRC_BUILDER: ghcr.io/crc-org/ci-crc-builder
-          CRC_BUILDER: ghcr.io/adrianriobo/ci-crc-builder
+          CRC_BUILDER: ghcr.io/crc-org/ci-crc-builder
           CRC_BUILDER_V: pr-${{ github.event.number }}
         run: |
           make crc-builder-tkn-create
