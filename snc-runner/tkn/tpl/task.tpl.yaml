@@ -123,6 +123,7 @@ spec:
         cmd="$cmd -s3-ak $(params.s3-access-key) "
         cmd="$cmd -s3-sk $(params.s3-secret-key) "
         cmd="$cmd -s3-path $(params.s3-path) "
+        cmd="$cmd -ref $(params.ref) "
         if [[ $(params.pr) != "" ]]; then
           cmd="$cmd -pr $(params.pr) "
         fi
