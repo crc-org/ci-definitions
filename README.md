@@ -23,3 +23,17 @@ git tag crc-builder-v1.0.0
 git push upstream crc-builder-v1.0.0
 # Change version on release-info to next version 
 ```
+
+## testing PRs
+
+Manually run make XXX-tkn-create, then;
+
+Typically PRs will be composed of images, tasks and pipelines:
+
+* Pipelines and tasks can use git resolver using the forked repo source for the PR
+* Task which needs the image need to be updated with the ghcr image
+
+A testing commit can be done at very last part of the PR to test this customizations which then can be used 
+from a pipelinerun with a pipelineref to the forked repo source for the pr.
+
+If everything works just revert and dismiss latest commit and create a tag
