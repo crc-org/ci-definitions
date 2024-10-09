@@ -41,13 +41,15 @@ endif
 
 snc-runner-tkn-create:
 	$(call tkn_template,$(SNC_RUNNER),$(SNC_RUNNER_V),snc-runner,task)
+	$(call tkn_template,$(SNC_RUNNER),$(SNC_RUNNER_V),snc-runner,pipeline)
 
 snc-runner-tkn-push: install-out-of-tree-tools
 ifndef IMAGE
 	IMAGE = $(SNC_RUNNER):$(SNC_RUNNER_V)
 endif
 	$(TOOLS_BINDIR)/tkn bundle push $(IMAGE)-tkn \
-		-f snc-runner/tkn/task.yaml
+		-f snc-runner/tkn/task.yaml \
+		-f snc-runner/tkn/pipeline.yaml
 
 #### crc-builder ####
 

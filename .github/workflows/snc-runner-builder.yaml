@@ -65,6 +65,9 @@ jobs:
           if [[ ! -f snc-runner/tkn/task.yaml ]]; then 
             exit 1
           fi
+          if [[ ! -f snc-runner/tkn/pipeline.yaml ]]; then 
+            exit 1
+          fi
           # Check if version is in sync
 
       - name: Create k8s Kind Cluster
@@ -77,12 +80,13 @@ jobs:
       - name: Deploy tasks
         run: |
           kubectl apply -f snc-runner/tkn/task.yaml
+          kubectl apply -f snc-runner/tkn/pipeline.yaml
 
       - name: Upload crc-builder-tkn
         uses: actions/upload-artifact@v4
         with:
           name: snc-runner-tkn
-          path: snc-runner/tkn/task.yaml
+          path: snc-runner/tkn/*.yaml
 
       
  

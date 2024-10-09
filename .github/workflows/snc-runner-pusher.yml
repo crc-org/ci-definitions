@@ -63,4 +63,5 @@ jobs:
           curl -LO "https://github.com/tektoncd/cli/releases/download/v${TKN_VERSION}/tkn_${TKN_VERSION}_Linux_x86_64.tar.gz"
           tar xvzf "tkn_${TKN_VERSION}_Linux_x86_64.tar.gz" tkn
           ./tkn bundle push ${{ env.image }}-tkn \
-            -f task.yaml 
+            -f task.yaml \
+            -f pipeline.yaml 

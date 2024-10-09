@@ -25,6 +25,23 @@ spec:
     - name: storage
       description: volume to store outputs to connect within the target machine + state file for the infrastructure 
       mountPath: /opt/storage
+    - name: s3-credentials
+      description: |
+        ocp secret holding the s3 credentials. Secret should be accessible to this task.
+        ---
+        apiVersion: v1
+        kind: Secret
+        metadata:
+          name: XXXX
+          labels:
+            app.kubernetes.io/component: XXXX
+        type: Opaque
+        data:
+          download-url: ${download_url}  
+          upload-url: ${upload_url}  
+          access-key: ${access_key}
+          secret-key: ${secret_key}
+      mountPath: /opt/s3-credentials
     - name: ocp-pullsecret
       description: |
         crc secret name holding the pullsecret. This is only required if backed tested is crc preset
@@ -65,10 +82,8 @@ spec:
     - name: ocp-extended-cert
       default: "enabled"
     # Destination
-    - name: s3-url
-    - name: s3-access-key
-    - name: s3-secret-key
     - name: s3-path
+      description: 'destination path on s3'
     # Control params
     - name: debug
       description: debug purposes extend verbosity on cmds executed on the target
@@ -83,7 +98,6 @@ spec:
         #!/bin/bash
 
         set pipefail
-
         # If debug add verbosity
         if [[ $(params.debug) == "true" ]]; then
           set -exuo pipefail
@@ -96,7 +110,6 @@ spec:
         TARGET_HOST_KEY_PATH=/opt/storage/$(params.workspace-resources-path)/$(params.key)
         chmod 600 ${TARGET_HOST_KEY_PATH}
         TARGET_FOLDER=crc-snc-runner
-        TARGET_RESULTS=results
         TARGET_CLEANUP='true'
         if [[ $(params.debug) == "true" ]]; then
           TARGET_CLEANUP='false'
@@ -118,17 +131,17 @@ spec:
         # Compose the run.sh command based on params
         cmd="${TARGET_FOLDER}/run.sh -ocp-ps-path /home/$(params.username)/${TARGET_FOLDER}/pullsecret "
         cmd="$cmd -ocp-version $(params.ocp-version) "
-        cmd="$cmd -ocp-extended-cert $(params.ocp-extended-cert) "
-        cmd="$cmd -s3-url $(params.s3-url) "
-        cmd="$cmd -s3-ak $(params.s3-access-key) "
-        cmd="$cmd -s3-sk $(params.s3-secret-key) "
-        cmd="$cmd -s3-path $(params.s3-path) "
-        cmd="$cmd -ref $(params.ref) "
+        cmd+="-ocp-extended-cert $(params.ocp-extended-cert) "
+        cmd+="-s3-url $(cat /opt/s3-credentials/upload-url) "
+        cmd+="-s3-ak $(cat /opt/s3-credentials/access-key) "
+        cmd+="-s3-sk $(cat /opt/s3-credentials/secret-key) "
+        cmd+="-s3-path $(params.s3-path) "
+        cmd+="-ref $(params.ref) "
         if [[ $(params.pr) != "" ]]; then
-          cmd="$cmd -pr $(params.pr) "
+          cmd+="-pr $(params.pr) "
         fi
         if [[ $(params.ocp-mirror) != "" ]]; then
-          cmd="$cmd -ocp-mirror $(params.ocp-mirror) "
+          cmd+="-ocp-mirror $(params.ocp-mirror) "
         fi
       
         # Exec
