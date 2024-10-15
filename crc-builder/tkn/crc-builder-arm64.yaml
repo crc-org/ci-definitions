@@ -162,8 +162,8 @@ spec:
           cmd+="quay.io/crc-org/ci-crc-builder:v1.0.0-linux"
 
           key=$(workspaces.pipelines-data.path)/rhel/id_rsa
-          username=$(cat ${workspace_path}/username)
-          host=$(cat ${workspace_path}/host)
+          username=$(cat $(workspaces.pipelines-data.path)/rhel/username)
+          host=$(cat $(workspaces.pipelines-data.path)/rhel/host)
 
           # Exec
           ssh -i ${key} $username@$host "cmd"
