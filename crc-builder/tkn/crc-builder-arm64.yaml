@@ -115,6 +115,7 @@ spec:
         cmd="$cmd --backed-url file://${workspace_path} "
         cmd="$cmd --conn-details-output ${workspace_path} "
         cmd="$cmd --arch arm64 "
+        cmd="$cmd --version '8.7' "
         cmd="$cmd --cpus 2 "
         cmd="$cmd --memory 8 "
         cmd="$cmd --spot "
@@ -190,6 +191,7 @@ spec:
     - name: decommission
       image: ghcr.io/redhat-developer/mapt:pr-309
       imagePullPolicy: Always
+      onError: continue
       script: |
         #!/bin/sh
         set -x
