@@ -132,8 +132,8 @@ spec:
           memory: "200Mi"
           cpu: "100m"
         limits:
-          memory: "600Mi"
-          cpu: "300m"
+          memory: "1000Mi"
+          cpu: "400m"
     - name: build
       # quay.io/crc-org/ci-crc-builder and v2.0.0-dev values should be passed to the template
       image: quay.io/rhqp/support-tools:v0.0.4
