@@ -142,6 +142,16 @@ spec:
           #!/bin/sh
           set -x
 
+          connect_options() {
+            local options="-o StrictHostKeyChecking=no"
+            options="$options -o UserKnownHostsFile=/dev/null"
+            options="$options -o ServerAliveInterval=30"
+            options="$options -o ServerAliveCountMax=1200"
+            options="$options -o BatchMode=yes"
+            options="$options -o ConnectTimeout=3"
+            echo $options
+          }
+
           cmd="podman run --rm --name crc-builder -d "
           cmd+="-e DATALAKE_URL=$(cat /opt/s3-credentials/upload-url) "
           cmd+="-e DATALAKE_ACCESS_KEY=$(cat /opt/s3-credentials/access-key) "
@@ -167,10 +177,10 @@ spec:
           host=$(cat $(workspaces.pipelines-data.path)/rhel/host)
 
           # Exec
-          ssh -i ${key} $username@$host "${cmd}"
+          ssh $(connect_options) -i ${key} $username@$host "${cmd}"
           # Check logs
           cmd="podman logs -f crc-builder "
-          ssh -i ${key} $username@$host "${cmd}" 
+          ssh $(connect_options) -i ${key} $username@$host "${cmd}" 
       
           if [[ $? -ne 0 ]]; then 
             exit 1
