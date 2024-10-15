@@ -39,6 +39,7 @@ spec:
           upload-url: ${upload_url}  
           access-key: ${access_key}
           secret-key: ${secret_key}
+      mountPath: /opt/s3-credentials
     - name: az-credentials
       description: |
         ocp secret holding the azure credentials. Secret should be accessible to this task.
@@ -166,10 +167,10 @@ spec:
           host=$(cat $(workspaces.pipelines-data.path)/rhel/host)
 
           # Exec
-          ssh -i ${key} $username@$host "cmd"
+          ssh -i ${key} $username@$host "${cmd}"
           # Check logs
           cmd="podman logs -f crc-builder "
-          ssh -i ${key} $username@$host "cmd" 
+          ssh -i ${key} $username@$host "${cmd}" 
       
           if [[ $? -ne 0 ]]; then 
             exit 1
