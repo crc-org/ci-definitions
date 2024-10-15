@@ -180,11 +180,11 @@ spec:
           echo -n "crc-linux-arm64.tar.xz.sha256sum" | tee $(results.shasumfile.path)
       resources:      
         requests:
-          memory: 450Mi
-          cpu: 250m
+          memory: 150Mi
+          cpu: 100m
         limits:
-          memory: 3800Mi
-          cpu: 1850m
+          memory: 500Mi
+          cpu: 250m
       timeout: 900m
     - name: decommission
       image: quay.io/redhat-developer/mapt:vpr-309
