@@ -52,22 +52,6 @@ spec:
         * storage_account (optional if we use remote az storage)
         * storage_key (optional if we use remote az storage)
       mountPath: /opt/credentials
-    - name: rh-account-secret
-      optional: true
-      description: |
-        ocp secret holding the credentials for a valid rh user to subscribe VM. Secret should be accessible to this task.
-
-        Sample format for valid Secret
-        ---
-        apiVersion: v1
-        kind: Secret
-        metadata:
-          name: credentials-${configname}
-        type: Opaque
-        data:
-          user: ${user}
-          password: ${password}
-      mountPath: /opt/rh-account-secret
 
   params:
     - name: crc-scm
@@ -111,17 +95,14 @@ spec:
         mkdir -p ${workspace_path}
 
         # Run mapt
-        cmd="mapt azure rhel create "
-        cmd="$cmd --project-name rhel "
+        cmd="mapt azure fedora create "
+        cmd="$cmd --project-name fedora "
         cmd="$cmd --backed-url file://${workspace_path} "
         cmd="$cmd --conn-details-output ${workspace_path} "
         cmd="$cmd --arch arm64 "
-        cmd="$cmd --version '8.7' "
         cmd="$cmd --cpus 2 "
         cmd="$cmd --memory 8 "
         cmd="$cmd --spot "
-        cmd="$cmd --rh-subscription-username $(cat /opt/rh-account-secret/user) "  
-        cmd="$cmd --rh-subscription-password $(cat /opt/rh-account-secret/password) "  
 
         eval "${cmd}"
         if [[ $? -ne 0 ]]; then 
@@ -177,6 +158,9 @@ spec:
           host=$(cat $(workspaces.pipelines-data.path)/rhel/host)
 
           # Exec
+          # We need podman on the machine
+          ssh $(connect_options) -i ${key} $username@$host "sudo dnf -y install podman"
+          # Now we can run the builder 
           ssh $(connect_options) -i ${key} $username@$host "${cmd}"
           # Check logs
           cmd="podman logs -f crc-builder "
@@ -224,8 +208,8 @@ spec:
         mkdir -p ${workspace_path}
 
         # Run mapt
-        cmd="mapt azure rhel destroy "
-        cmd="$cmd --project-name rhel "
+        cmd="mapt azure fedora destroy "
+        cmd="$cmd --project-name fedora "
         cmd="$cmd --backed-url file://${workspace_path} "
         eval "${cmd}"
         if [[ $? -ne 0 ]]; then 
