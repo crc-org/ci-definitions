@@ -1,0 +1,71 @@
+name: crc-e2e-pusher
+
+on:
+  workflow_run:
+    workflows: crc-e2e-builder
+    types:
+      - completed
+
+jobs:
+  push:
+    name: push
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Download crc-e2e assets
+        uses: actions/download-artifact@v4
+        with:
+          name: crc-e2e
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      - name: Get crc-e2e build informaiton
+        run: |
+          echo "source_event=$(cat crc-e2e-build-event)" >> "$GITHUB_ENV"
+          echo "image=$(cat crc-e2e-image)" >> "$GITHUB_ENV"
+
+      - name: Log in to ghcr.io
+        if: ${{ env.source_event == 'pull_request' }}
+        uses: redhat-actions/podman-login@v1
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Log in quay.io
+        if: ${{ env.source_event == 'push' }}
+        uses: redhat-actions/podman-login@v1
+        with:
+          registry: quay.io
+          username: ${{ secrets.QUAY_IO_USERNAME }}
+          password: ${{ secrets.QUAY_IO_PASSWORD }}
+
+      - name: Push crc-e2e
+        run: |
+          podman load -i crc-e2e-linux.tar
+          podman push ${{ env.image }}-linux
+          podman load -i crc-e2e-windows.tar
+          podman push ${{ env.image }}-windows
+          podman load -i crc-e2e-darwin.tar
+          podman push ${{ env.image }}-darwin
+
+      - name: Download crc-e2e-tkn assets
+        uses: actions/download-artifact@v4
+        with:
+          name: crc-e2e-tkn
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      - name: Push crc-e2e-tkn
+        env:
+          TKN_VERSION: '0.37.0'
+        run: |
+          curl -LO "https://github.com/tektoncd/cli/releases/download/v${TKN_VERSION}/tkn_${TKN_VERSION}_Linux_x86_64.tar.gz"
+          tar xvzf "tkn_${TKN_VERSION}_Linux_x86_64.tar.gz" tkn
+          ./tkn bundle push ${{ env.image }}-tkn \
+            -f crc-e2e-installer.yaml \
+            -f crc-e2e.yaml
+
