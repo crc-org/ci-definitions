@@ -43,15 +43,6 @@ jobs:
           username: ${{ secrets.QUAY_IO_USERNAME }}
           password: ${{ secrets.QUAY_IO_PASSWORD }}
 
-      - name: Push crc-builder
-        run: |
-          podman load -i crc-builder-linux.tar 
-          podman push ${{ env.image }}-linux
-          podman load -i crc-builder-windows.tar
-          podman push ${{ env.image }}-windows
-          podman load -i crc-builder-darwin.tar
-          podman push ${{ env.image }}-darwin
-
       - name: Download crc-builder-tkn assets
         uses: actions/download-artifact@v4
         with:

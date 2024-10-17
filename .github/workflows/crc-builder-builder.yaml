@@ -8,8 +8,12 @@ on:
     paths: ['crc-builder/**', '.github\/workflows\/crc-builder*' ]
       
 jobs:
-  build:
-    name: build
+  build-on-pull:
+    name: build-on-pull
+    if: ${{ github.event_name == 'pull_request' }}
+    permissions:
+      contents: read
+      packages: write
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
@@ -21,33 +25,57 @@ jobs:
         run: |
           sudo apt-get install -y qemu-user-static
 
-      - name: Build image for PR
-        if: ${{ github.event_name == 'pull_request' }}
+      - name: Build image 
         env:
           CRC_BUILDER: ghcr.io/crc-org/ci-crc-builder
           CRC_BUILDER_V: pr-${{ github.event.number }}
         run: |
           make crc-builder-oci-build
-          make crc-builder-oci-save
-          echo "image=${CRC_BUILDER}:${CRC_BUILDER_V}" >> "$GITHUB_ENV"
-  
+
+      - name: Log in to ghcr.io
+        uses: redhat-actions/podman-login@v1
+        with:
+          registry: ghcr.io
+          # username: ${{ github.actor }}
+          username: crc-org
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push image crc-builder
+        env:
+          CRC_BUILDER: ghcr.io/crc-org/ci-crc-builder
+          CRC_BUILDER_V: pr-${{ github.event.number }}
+        run: |
+          make crc-builder-oci-push
+
+  build-on-push:
+    name: build-on-push
+    if: ${{ github.event_name == 'push' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+        # Allow emulation for building multi arch images
+      - name: Prepare runner
+        shell: bash
+        run: |
+          sudo apt-get install -y qemu-user-static
+
       - name: Build image for Release
-        if: ${{ github.event_name == 'push' }}
         run: |
           make crc-builder-oci-build
-          make crc-builder-oci-save
-          echo "image=$(sed -n 1p crc-builder/release-info):v$(sed -n 2p crc-builder/release-info)" >> "$GITHUB_ENV"
 
-      - name: Create image metadata
-        run: |
-          echo ${{ env.image }} > crc-builder-image
-          echo ${{ github.event_name }} > crc-builder-build-event
-  
-      - name: Upload crc-builder
-        uses: actions/upload-artifact@v4
+      - name: Log in quay.io
+        if: ${{ env.source_event == 'push' }}
+        uses: redhat-actions/podman-login@v1
         with:
-          name: crc-builder
-          path: crc-builder*
+          registry: quay.io
+          username: ${{ secrets.QUAY_IO_USERNAME }}
+          password: ${{ secrets.QUAY_IO_PASSWORD }}
+
+      - name: Push crc-builder
+        run: |
+          make crc-builder-oci-push
 
   tkn-check:
     runs-on: ubuntu-24.04
@@ -62,6 +90,12 @@ jobs:
           CRC_BUILDER_V: pr-${{ github.event.number }}
         run: |
           make crc-builder-tkn-create
+          echo "image=${CRC_BUILDER}:${CRC_BUILDER_V}" >> "$GITHUB_ENV"
+
+      - name: Create image metadata
+        run: |
+          echo ${{ env.image }} > crc-builder-image
+          echo ${{ github.event_name }} > crc-builder-build-event
 
       - name: Check tkn specs
         run: |
@@ -91,9 +125,8 @@ jobs:
           name: crc-builder-tkn
           path: crc-builder/tkn/crc-builder*
 
-
-
-
-
-
-     
+      - name: Upload crc-builder
+        uses: actions/upload-artifact@v4
+        with:
+          name: crc-builder
+          path: crc-builder*
