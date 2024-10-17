@@ -107,4 +107,22 @@ endif
 		-f crc-builder/tkn/crc-builder-installer.yaml \
 		-f crc-builder/tkn/crc-builder.yaml \ 
 		-f crc-builder/tkn/crc-builder-arm64.yaml
- 	
+
+#### crc-e2e ####
+
+.PHONY: crc-e2e-tkn-create crc-e2e-tkn-push
+
+# Registries and versions
+CRC_E2E ?= $(shell sed -n 1p crc-e2e/release-info)
+CRC_E2E_V ?= v$(shell sed -n 2p crc-e2e/release-info)
+CRC_E2E_SAVE ?= crc-e2e
+
+crc-e2e-tkn-create:
+	$(call tkn_template,$(CRC_E2E),$(CRC_E2E_V),crc-e2e,crc-e2e)
+
+crc-e2e-tkn-push: install-out-of-tree-tools
+ifndef IMAGE
+	IMAGE = $(CRC_E2E):$(CRC_E2E_V)
+endif
+	$(TOOLS_BINDIR)/tkn bundle push $(IMAGE)-tkn \
+		-f crc-e2e/tkn/crc-e2e.yaml

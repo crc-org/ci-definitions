@@ -1,0 +1,79 @@
+name: crc-e2e-builder
+
+on:
+  push:
+    tags: [ 'crc-e2e-v*' ]
+  pull_request:
+    branches: [ main ]
+    paths: ['crc-e2e/**', '.github\/workflows\/crc-e2e*' ]
+
+jobs:
+  build:
+    name: build
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build image for PR
+        if: ${{ github.event_name == 'pull_request' }}
+        env:
+          CRC_E2E: ghcr.io/crc-org/ci-crc-e2e
+          CRC_E2E_V: pr-${{ github.event.number }}
+        run: |
+          make crc-e2e-oci-build
+          make crc-e2e-oci-save
+          echo "image=${CRC_E2E}:${CRC_E2E_V}" >> "$GITHUB_ENV"
+
+      - name: Create image metadata
+        run: |
+          echo ${{ env.image }} > crc-e2e-image
+          echo ${{ github.event_name }} > crc-e2e-build-event
+
+      - name: Upload crc-e2e
+        uses: actions/upload-artifact@v4
+        with:
+          name: crc-e2e
+          path: crc-e2e*
+
+  tkn-check:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Template tkn for PR
+        if: ${{ github.event_name == 'pull_request' }}
+        env:
+          CRC_E2E: ghcr.io/crc-org/ci-crc-e2e
+          CRC_E2E_V: pr-${{ github.event.number }}
+        run: |
+          make crc-e2e-tkn-create
+
+      - name: Check tkn specs
+        run: |
+          if [[ ! -f crc-e2e/tkn/crc-e2e-installer.yaml ]]; then
+            exit 1
+          fi
+          if [[ ! -f crc-e2e/tkn/crc-e2e.yaml ]]; then
+            exit 1
+          fi
+          # Check if version is in sync
+
+      - name: Create k8s Kind Cluster
+        uses: helm/kind-action@v1
+
+        # https://docs.openshift.com/pipelines/1.15/about/op-release-notes.html
+      - name: Deploy min supported tekton version
+        run: kubectl apply -f https://storage.googleapis.com/tekton-releases/pipeline/previous/v0.44.5/release.yaml
+
+      - name: Deploy tasks
+        run: |
+          kubectl apply -f crc-e2e/tkn/crc-e2e-installer.yaml
+          kubectl apply -f crc-e2e/tkn/crc-e2e.yaml
+
+      - name: Upload crc-e2e-tkn
+        uses: actions/upload-artifact@v4
+        with:
+          name: crc-e2e-tkn
+          path: crc-e2e/tkn/crc-e2e*
