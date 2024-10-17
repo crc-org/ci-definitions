@@ -5,7 +5,7 @@ on:
     tags: [ 'crc-builder-v*' ]       
   pull_request:
     branches: [ main ]
-    paths: ['crc-builder/**', '.github\/workflows\/crc-builder*' ]
+    paths: ['Makefile', 'crc-builder/**', '.github\/workflows\/crc-builder*' ]
       
 jobs:
   build:

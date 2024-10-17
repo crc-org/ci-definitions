@@ -7,7 +7,7 @@ on:
       - '.github\/workflows\/snc-runner\/release-info' 
   pull_request:
     branches: [ main ]
-    paths: ['snc-runner/**', '.github\/workflows\/snc-runner*' ]
+    paths: ['Makefile', 'snc-runner/**', '.github\/workflows\/snc-runner*' ]
 
 jobs:
   build:
