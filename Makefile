@@ -63,30 +63,36 @@ CRC_BUILDER_SAVE ?= crc-builder
 crc-builder-oci-build: CONTEXT=crc-builder/oci
 crc-builder-oci-build: MANIFEST=$(CRC_BUILDER):$(CRC_BUILDER_V)
 crc-builder-oci-build:
-	${CONTAINER_MANAGER} manifest create $(MANIFEST)-linux
-	${CONTAINER_MANAGER} build --platform linux/arm64 --build-arg=TARGETARCH=arm64 --manifest $(MANIFEST)-linux -f $(CONTEXT)/Containerfile.linux $(CONTEXT)
-	${CONTAINER_MANAGER} build --platform linux/amd64 --build-arg=TARGETARCH=amd64 --manifest $(MANIFEST)-linux -f $(CONTEXT)/Containerfile.linux $(CONTEXT)
+	${CONTAINER_MANAGER} build --platform linux/arm64 --manifest $(MANIFEST)-linux-arm64 -f $(CONTEXT)/Containerfile.linux $(CONTEXT)
+	${CONTAINER_MANAGER} build --platform linux/amd64 --manifest $(MANIFEST)-linux-amd64 -f $(CONTEXT)/Containerfile.linux $(CONTEXT)
 	${CONTAINER_MANAGER} build -t $(MANIFEST)-windows -f $(CONTEXT)/Containerfile.non-linux --build-arg=OS=windows $(CONTEXT)
 	${CONTAINER_MANAGER} build -t $(MANIFEST)-darwin -f $(CONTEXT)/Containerfile.non-linux --build-arg=OS=darwin $(CONTEXT)
 
 crc-builder-oci-save: MANIFEST=$(CRC_BUILDER):$(CRC_BUILDER_V)
+crc-builder-oci-save: ARM64D=$(shell ${CONTAINER_MANAGER} manifest inspect ${MANIFEST}-linux-arm64 | jq '.manifests[0].digest')
 crc-builder-oci-save:
-	${CONTAINER_MANAGER} save -o $(CRC_BUILDER_SAVE)-linux.tar $(MANIFEST)-linux
+	${CONTAINER_MANAGER} manifest annotate --arch amd64 $(MANIFEST)-linux-arm64 $(ARM64D)
+	${CONTAINER_MANAGER} save -m -o $(CRC_BUILDER_SAVE)-linux-amd64.tar $(MANIFEST)-linux-amd64
+	${CONTAINER_MANAGER} save -m -o $(CRC_BUILDER_SAVE)-linux-arm64.tar $(MANIFEST)-linux-arm64
 	${CONTAINER_MANAGER} save -o $(CRC_BUILDER_SAVE)-windows.tar $(MANIFEST)-windows
 	${CONTAINER_MANAGER} save -o $(CRC_BUILDER_SAVE)-darwin.tar $(MANIFEST)-darwin
 
 crc-builder-oci-load:
-	${CONTAINER_MANAGER} load -i $(CRC_BUILDER_SAVE)-linux.tar 
+	${CONTAINER_MANAGER} load -i $(CRC_BUILDER_SAVE)-linux-arm64.tar 
+	${CONTAINER_MANAGER} load -i $(CRC_BUILDER_SAVE)-linux-amd64.tar 
 	${CONTAINER_MANAGER} load -i $(CRC_BUILDER_SAVE)-windows.tar 
 	${CONTAINER_MANAGER} load -i $(CRC_BUILDER_SAVE)-darwin.tar 
 
+crc-builder-oci-push: MANIFEST=$(CRC_BUILDER):$(CRC_BUILDER_V)
 crc-builder-oci-push:
-ifndef IMAGE
-	IMAGE = $(CRC_BUILDER):$(CRC_BUILDER_V)
-endif
-	${CONTAINER_MANAGER} manifest push $(IMAGE)-linux
-	${CONTAINER_MANAGER} push $(IMAGE)-windows
-	${CONTAINER_MANAGER} push $(IMAGE)-darwin
+	${CONTAINER_MANAGER} push $(MANIFEST)-linux-arm64
+	${CONTAINER_MANAGER} push $(MANIFEST)-linux-amd64
+	${CONTAINER_MANAGER} manifest create $(MANIFEST)-linux
+	${CONTAINER_MANAGER} manifest add $(MANIFEST)-linux docker://$(MANIFEST)-linux-arm64
+	${CONTAINER_MANAGER} manifest add $(MANIFEST)-linux docker://$(MANIFEST)-linux-amd64
+	${CONTAINER_MANAGER} manifest push --all $(MANIFEST)-linux
+	${CONTAINER_MANAGER} push $(MANIFEST)-windows
+	${CONTAINER_MANAGER} push $(MANIFEST)-darwin
 
 crc-builder-tkn-create:
 	$(call tkn_template,$(CRC_BUILDER),$(CRC_BUILDER_V),crc-builder,crc-builder-installer)
