@@ -4,7 +4,7 @@ kind: Task
 metadata:
   name: crc-builder-installer
   labels:
-    app.kubernetes.io/version: "v1.0.0"
+    app.kubernetes.io/version: "v1.0.1"
     redhat.com/product: openshift-local
     dev.lifecycle.io/phase: build
     openshift-local.redhat.com/component: installer
@@ -60,8 +60,8 @@ spec:
   
   steps:
   - name: crc-executable-builder
-    # quay.io/crcont/ci-crc-builder and v1.0.0 values should be passed to the template
-    image: quay.io/crcont/ci-crc-builder:v1.0.0-$(params.os) 
+    # quay.io/crc-org/ci-crc-builder and v1.0.1 values should be passed to the template
+    image: quay.io/crc-org/ci-crc-builder:v1.0.1-$(params.os) 
     imagePullPolicy: Always
     volumeMounts:
     - mountPath: /opt/host/
