@@ -2,7 +2,7 @@ name: crc-builder-pusher
 
 on:
   workflow_run:
-    workflows: crc-builder-builder
+    workflows: [ 'crc-builder-builder' ]
     types:
       - completed
   
@@ -45,11 +45,19 @@ jobs:
 
       - name: Push crc-builder
         run: |
-          podman load -i crc-builder-linux.tar 
-          podman push ${{ env.image }}-linux
-          podman load -i crc-builder-windows.tar
+          # Load 
+          podman load -i crc-builder-linux-arm64.tar 
+          podman load -i crc-builder-linux-amd64.tar 
+          podman load -i crc-builder-windows.tar 
+          podman load -i crc-builder-darwin.tar 
+          # Push
+          podman push ${{ env.image }}-linux-arm64
+          podman push ${{ env.image }}-linux-amd64
+          podman manifest create ${{ env.image }}-linux
+          podman manifest add ${{ env.image }}-linux docker://${{ env.image }}-linux-arm64
+          podman manifest add ${{ env.image }}-linux docker://${{ env.image }}-linux-amd64
+          podman manifest push --all ${{ env.image }}-linux
           podman push ${{ env.image }}-windows
-          podman load -i crc-builder-darwin.tar
           podman push ${{ env.image }}-darwin
 
       - name: Download crc-builder-tkn assets
