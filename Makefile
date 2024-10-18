@@ -97,12 +97,14 @@ crc-builder-oci-push:
 crc-builder-tkn-create:
 	$(call tkn_template,$(CRC_BUILDER),$(CRC_BUILDER_V),crc-builder,crc-builder-installer)
 	$(call tkn_template,$(CRC_BUILDER),$(CRC_BUILDER_V),crc-builder,crc-builder)
+	$(call tkn_template,$(CRC_BUILDER),$(CRC_BUILDER_V),crc-builder,crc-builder-arm64)
 
 crc-builder-tkn-push: install-out-of-tree-tools
 ifndef IMAGE
 	IMAGE = $(CRC_BUILDER):$(CRC_BUILDER_V)
 endif
 	$(TOOLS_BINDIR)/tkn bundle push $(IMAGE)-tkn \
-		-f crc-builder/tkn/crc-builder-installer.yaml
-		-f crc-builder/tkn/crc-builder.yaml
+		-f crc-builder/tkn/crc-builder-installer.yaml \
+		-f crc-builder/tkn/crc-builder.yaml \ 
+		-f crc-builder/tkn/crc-builder-arm64.yaml
  	
