@@ -18,117 +18,133 @@ spec:
   description: >-
     This task will build openshift local installers 
 
+  workspaces:
+    - name: s3-credentials
+      description: |
+        ocp secret holding the s3 credentials. Secret should be accessible to this task.
+        ---
+        apiVersion: v1
+        kind: Secret
+        metadata:
+          name: XXXX
+          labels:
+            app.kubernetes.io/component: XXXX
+        type: Opaque
+        data:
+          download-url: ${download_url}  
+          upload-url: ${upload_url}  
+          bucket: ${bucket_value}  
+          access-key: ${access_key}
+          secret-key: ${secret_key}
+      mountPath: /opt/s3-credentials
+    - name: host-info
+      description: |
+        ocp secret holding the hsot info credentials. Secret should be accessible to this task.
+        ---
+        apiVersion: v1
+        kind: Secret
+        metadata:
+          name: XXXX
+          labels:
+            app.kubernetes.io/component: XXXX
+        type: Opaque
+        data:
+          host: XXXX
+          user: XXXX
+          password: XXXX
+          key: XXXX
+          platform: XXXX
+          os-version: XXXX
+          arch: XXXX
+          os: XXXX
+      mountPath: /opt/host/
+
   params:
-  - name: crc-scm
-    default: "''"
-  - name: crc-scm-pr
-    default: "''"
-  - name: crc-scm-ref 
-    default: main
-  - name: custom-bundle-version-variable
-    description: |
-      When building an installer based on a custom bundle it is required
-      to manipulate the Makefile to match the custom version. 
-      Current variables holding bundle version based on bundle type are 
-      * OPENSHIFT_VERSION
-      * PODMAN_VERSION
-    default: "''"
-  - name: custom-bundle-version
-    default: "''"
-  - name: os
-    description: valid values are macos and windows
-  - name: host-config-secret
-    description: secret holding a host config
-  - name: s3-url
-  - name: s3-access-key
-  - name: s3-secret-key
-  - name: s3-folder-path
-  - name: s3-download-url
+    # Manage task params
+    - name: os
+      description: valid values are macos and windows
+    # SCM params
+    - name: crc-scm
+      default: https://github.com/code-ready/crc.git
+    - name: crc-scm-ref 
+      default: main
+    - name: crc-scm-pr
+      default: "''"
+    # Control params
+    - name: debug
+      description: debug purposes extend verbosity on cmds executed on the target
+      default: 'false'
 
   results:
-  - name: downloadable-base-url
-    description: base url where the installer and the shasumfile can be downloaded
-  - name: distributable-name
-    description: distributable file name for the installer
-  - name: shasumfile
-    description: shasumfile name 
+    - name: downloadable-base-url
+      description: base url where the installer and the shasumfile can be downloaded
+    - name: distributable-name
+      description: distributable file name for the installer
+    - name: shasumfile
+      description: shasumfile name 
 
-  volumes:
-  - name: host-connection
-    secret:
-      secretName: $(params.host-config-secret)
-  
   steps:
-  - name: crc-executable-builder
-    # cimage and cversion values should be passed to the template
-    image: cimage:cversion-$(params.os) 
-    imagePullPolicy: Always
-    volumeMounts:
-    - mountPath: /opt/host/
-      name: host-connection
-    script: |
-        #!/bin/sh
+    - name: crc-executable-builder
+      # cimage and cversion values should be passed to the template
+      image: cimage:cversion-$(params.os) 
+      imagePullPolicy: Always
+      script: |
+          #!/bin/sh
 
-        # Copy key to connect to machine
-        cp /opt/host/key id_rsa
-        chmod 600 id_rsa 
+          # Prepare ENVs
+          SECONDS=0
+          DEBUG=$(params.debug)
+          TARGET_HOST=$(cat /opt/host/host)
+          TARGET_HOST_USERNAME=$(cat /opt/host/user)
+          cp /opt/host/key id_rsa
+          chmod 600 id_rsa
+          TARGET_HOST_KEY_PATH=id_rsa
+          TARGET_FOLDER=crc-builder
+          TARGET_CLEANUP='true'
+          
+          # Create cmd per OS
+          runner="run.sh"
+          if [[ $(params.os) == "windows" ]]; then
+            runner="run.ps1"
+          fi
+          cmd="${TARGET_FOLDER}/${runner} -crcSCM $(params.crc-scm) "
+          cmd+="-crcSCMRef $(params.crc-scm-ref) "
+          if [[ $(params.crc-scm-pr) != "" ]]; then
+            cmd+="-crcSCMPR $(params.crc-scm-pr) "
+          fi
+          cmd+="-uploadPath $(cat /opt/s3-credentials/bucket)/$(params.s3-folder-path) "
+          cmd+="-datalakeURL $(cat /opt/s3-credentials/upload-url) "
+          cmd+="-datalakeAcessKey $(cat /opt/s3-credentials/access-key) "
+          cmd+="-datalakeSecretKey $(cat /opt/s3-credentials/secret-key) "
 
-        # Run builder on target machine
-        TARGET_HOST=$(cat /opt/host/host)
-        TARGET_HOST_USERNAME=$(cat /opt/host/user)
-        TARGET_HOST_KEY_PATH=id_rsa
-        # sanitizing permissions for the key
-        chmod 600 ${TARGET_HOST_KEY_PATH}
+          # Exec
+          . entrypoint.sh "${cmd}"
+          if [[ $? -ne 0 ]]; then 
+            exit 1
+          fi
 
-        DATALAKE_URL=$(params.s3-url)
-        DATALAKE_ACCESS_KEY=$(params.s3-access-key)
-        DATALAKE_SECRET_KEY=$(params.s3-secret-key)
-        UPLOAD_PATH=$(params.s3-folder-path)
+          echo -n "$(params.s3-download-url)" \
+            | tee $(results.downloadable-base-url.path)
+          case "$(params.os)" in
+          macos|darwin)
+            echo -n "crc-macos-installer.pkg" | tee $(results.distributable-name.path)
+            echo -n "crc-macos-installer.pkg.sha256sum" | tee $(results.shasumfile.path)
+            ;;
+          windows)
+            echo -n "crc-windows-installer.zip" | tee $(results.distributable-name.path)
+            echo -n "crc-windows-installer.zip.sha256sum" | tee $(results.shasumfile.path)
+            ;;
+          *)
+            echo -n "" | tee $(results.distributable-name.path)
+            echo -n "" | tee $(results.shasumfile.path)
+            ;;
+          esac
 
-        # Optionals
-        if [[ $(params.crc-scm) != "" ]]; then
-          CRC_SCM=$(params.crc-scm)
-        fi
-        if [[ $(params.crc-scm-pr) != "" ]]; then
-          PULL_REQUEST=$(params.crc-scm-pr)
-        fi
-        if [[ $(params.crc-scm-ref) != "" ]]; then
-          REF=$(params.crc-scm-ref)
-        fi
-        if [[ $(params.custom-bundle-version-variable) != "" ]]; then
-          CUSTOM_BUNDLE_VERSION_VARIABLE=$(params.custom-bundle-version-variable)
-        fi
-        if [[ $(params.custom-bundle-version) != "" ]]; then
-          CUSTOM_BUNDLE_VERSION=$(params.custom-bundle-version)
-        fi
-        
-        # set -exuo pipefail
-
-        # Build installer
-        . entrypoint.sh
-
-        echo -n "$(params.s3-download-url)" \
-          | tee $(results.downloadable-base-url.path)
-        case "$(params.os)" in
-        macos|darwin)
-          echo -n "crc-macos-installer.pkg" | tee $(results.distributable-name.path)
-          echo -n "crc-macos-installer.pkg.sha256sum" | tee $(results.shasumfile.path)
-          ;;
-        windows)
-          echo -n "crc-windows-installer.zip" | tee $(results.distributable-name.path)
-          echo -n "crc-windows-installer.zip.sha256sum" | tee $(results.shasumfile.path)
-          ;;
-        *)
-          echo -n "" | tee $(results.distributable-name.path)
-          echo -n "" | tee $(results.shasumfile.path)
-          ;;
-        esac
-
-    resources:      
-      requests:
-        memory: 150Mi
-        cpu: 90m
-      limits:
-        memory: 270Mi
-        cpu: 150m
-    timeout: 90m
+      resources:      
+        requests:
+          memory: 150Mi
+          cpu: 90m
+        limits:
+          memory: 270Mi
+          cpu: 150m
+      timeout: 90m

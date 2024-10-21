@@ -1,17 +1,10 @@
 # Script to be executed on windows machine to build a crc windows installer
 # and upload it to s3 compatible storage
 param(
-    [Parameter(HelpMessage='When build based on a custom bundle need to set type: PODMAN_VERSION or OPENSHIFT_VERSION')]
-    $customBundleVersionVariable,
-    [Parameter(HelpMessage='When build based on a custom bundle need to set version')]
-    $customBundleVersion,
     [Parameter(HelpMessage='crc scm')]
     $crcSCM="https://github.com/code-ready/crc.git",
     [Parameter(HelpMessage='Optional parameter to build an specific PR for crc')]
     $crcSCMPR,
-    # Review this one
-    [Parameter(HelpMessage='Optinal crc version to build an specfic')]
-    $crcVersion,
     [Parameter(HelpMessage='crc scm ref')]
     $crcSCMRef="main",
     [Parameter(HelpMessage='upload path on remote storage where upload the artifacts')]
@@ -70,27 +63,16 @@ git clone $crcSCM
 
 pushd crc
 # Fetch according to parameters provided
-if (! $PSBoundParameters.ContainsKey('crcVersion')) {
-    $crcVersionPartial=Get-Date -format "yy.MM.dd"
-    if ($PSBoundParameters.ContainsKey('crcSCMPR')) {
-        git fetch origin pull/$crcSCMPR/head:pr-$crcSCMPR
-        git checkout pr-$crcSCMPR
-    } else {
-        git checkout $crcSCMRef
-    }
-    # In case we build for a custom bundle we need to match the version
-    # if ($PSBoundParameters.ContainsKey('customBundleVersionVariable') -And $PSBoundParameters.ContainsKey('customBundleVersion')) {
-    #     (Get-Content -path Makefile) `
-    #             -replace "$customBundleVersionVariable \?= .*","$customBundleVersionVariable ?= $customBundleVersion" `
-    #             | Set-Content -path Makefile
-    # }
-    (Get-Content -path Makefile) `
-            -replace 'CRC_VERSION = .*',"CRC_VERSION = $crcVersionPartial" `
-            | Set-Content -path Makefile
+$crcVersionPartial=Get-Date -format "yy.MM.dd"
+if ($PSBoundParameters.ContainsKey('crcSCMPR')) {
+    git fetch origin pull/$crcSCMPR/head:pr-$crcSCMPR
+    git checkout pr-$crcSCMPR
+} else {
+    git checkout $crcSCMRef
 }
-else {
-    git checkout "v$crcVersion"
-}
+(Get-Content -path Makefile) `
+        -replace 'CRC_VERSION = .*',"CRC_VERSION = $crcVersionPartial" `
+        | Set-Content -path Makefile
 popd
 
 # Build admin-helper

@@ -3,26 +3,23 @@ FROM registry.access.redhat.com/ubi8/ubi-minimal as preparer
 ARG OS
 ENV OS ${OS}
 
-COPY lib/${OS}/builder/* /usr/local/crc-builder/
-COPY lib/${OS}/entrypoint.sh /usr/local/bin/entrypoint.sh
-
-RUN cd /usr/local/crc-builder && \ 
+RUN cd /tmp && \ 
     if [[ ${OS} == 'windows' ]]; then \
         curl -k -LO https://dl.minio.io/client/mc/release/windows-amd64/mc.exe; \
     else \
         curl -k -LO https://dl.min.io/client/mc/release/darwin-amd64/mc; \
         chmod +x mc; \
     fi;
+    
+#v0.0.6
+FROM quay.io/rhqp/deliverest@sha256:016f766cac1bb644e1415b1ebb34504394ba0806d52679a55a0ef1162edabb47 
 
-FROM quay.io/rhqp/support-tools:v0.0.2
+LABEL org.opencontainers.image.authors="CRCQE <devtools-crc-qe@redhat.com>"
 
-LABEL org.opencontainers.image.authors="CodeReady Containers <devtools-cdk@redhat.com>"
+ARG OS 
 
-ENV PLATFORM ${PLATFORM}
-ENV BUILDER_RESOURCES "/usr/local/crc-builder"
+ENV ASSETS_FOLDER=/opt/crc-builder \
+    OS=${OS}
 
-COPY --from=preparer /usr/local/crc-builder ${BUILDER_RESOURCES}
-COPY --from=preparer /usr/local/bin/entrypoint.sh /usr/local/bin
-COPY lib/common.sh /usr/local/bin
-
-ENTRYPOINT entrypoint.sh
+COPY --from=preparer /tmp/* ${ASSETS_FOLDER}/
+COPY lib/${OS}/* ${ASSETS_FOLDER}/

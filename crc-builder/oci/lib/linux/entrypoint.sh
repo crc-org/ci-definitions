@@ -1,8 +1,5 @@
 #!/bin/bash
 
-# Imports
-source ./common.sh
-
 # Script to be executed on macos machine to build a crc macos installer
 # and upload it to s3 compatible storage
 
