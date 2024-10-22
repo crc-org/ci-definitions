@@ -4,6 +4,7 @@
 crcSCM="https://github.com/code-ready/crc.git"
 crcSCMPR=''
 crcSCMRef='main'
+targetFolder="crc-builder"
 uploadPath='crc-binaries'
 datalakeURL=''
 datalakeAcessKey=''
@@ -24,6 +25,11 @@ while [[ $# -gt 0 ]]; do
         ;;
         -crcSCMRef)
         crcSCMRef="$2"
+        shift 
+        shift 
+        ;;
+        -targetFolder)
+        targetFolder="$2"
         shift 
         shift 
         ;;
@@ -82,13 +88,15 @@ s3_upload() {
 ####### MAIN ########
 #####################
 
+cd $targetFolder
+
 # Custom setup for git
 git config --global http.version "HTTP/1.1"
 git config --global http.lowSpeedLimit 0      
 git config --global http.lowSpeedTime 999999 
 
 # Get crc code
-git clone ${CRC_SCM}
+git clone $crcSCM
 
 # Fetch according to parameters provided
 CRC_VERSION_PARTIAL=$(date +'%y.%m.%d')
@@ -111,7 +119,7 @@ make -C admin-helper macos-universal VERSION=$admin_version
 
 # Build vfkit
 git clone https://github.com/code-ready/vfkit.git
-sudo make -C vfkit all
+make -C vfkit all
 
 # Build pkg
 pushd crc

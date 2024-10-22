@@ -58,13 +58,15 @@ spec:
     # SCM params
     - name: crc-scm
       default: https://github.com/code-ready/crc.git
-    - name: crc-scm-pr
-      default: "''"
     - name: crc-scm-ref 
       default: main
+    - name: crc-scm-pr
+      default: "''"
+    
 
     # Target params
     - name: s3-folder-path
+      default: 'crc-binaries'
 
     # Builder params
     - name: builder-cpus 
@@ -140,19 +142,15 @@ spec:
           }
 
           cmd="podman run --rm --name crc-builder -d "
-          cmd+="-e DATALAKE_URL=$(cat /opt/s3-credentials/upload-url) "
-          cmd+="-e DATALAKE_ACCESS_KEY=$(cat /opt/s3-credentials/access-key) "
-          cmd+="-e DATALAKE_SECRET_KEY=$(cat /opt/s3-credentials/secret-key) "
-          # Optionals
-          if [[ $(params.crc-scm) != "" ]]; then
-            cmd+="-e CRC_SCM=$(params.crc-scm) "
-          fi
+          # SCM
+          cmd+="-e CRC_SCM=$(params.crc-scm) "
+          cmd+="-e CRC_SCM_REF=$(params.crc-scm-ref) "
           if [[ $(params.crc-scm-pr) != "" ]]; then
             cmd+="-e CRC_SCM_PR=$(params.crc-scm-pr) "
           fi
-          if [[ $(params.crc-scm-ref) != "" ]]; then
-            cmd+="-e CRC_SCM_REF=$(params.crc-scm-ref) "
-          fi
+          cmd+="-e DATALAKE_URL=$(cat /opt/s3-credentials/upload-url) "
+          cmd+="-e DATALAKE_ACCESS_KEY=$(cat /opt/s3-credentials/access-key) "
+          cmd+="-e DATALAKE_SECRET_KEY=$(cat /opt/s3-credentials/secret-key) "
           if [[ $(params.s3-folder-path) != "" ]]; then
             cmd+="-e UPLOAD_PATH=$(cat /opt/s3-credentials/bucket)/$(params.s3-folder-path) "
           fi

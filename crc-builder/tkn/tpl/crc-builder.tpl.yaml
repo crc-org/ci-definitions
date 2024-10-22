@@ -18,70 +18,83 @@ spec:
   description: >-
     This task will build openshift local binary for linux distributions 
 
-  params:
-  - name: crc-scm
-    default: https://github.com/code-ready/crc.git
-  - name: crc-scm-pr
-    default: "''"
-  - name: crc-scm-ref 
-    default: main
-  - name: s3-url
-  - name: s3-access-key
-  - name: s3-secret-key
-  - name: s3-folder-path
-  - name: s3-download-url
+  workspaces:
+    - name: s3-credentials
+      description: |
+        ocp secret holding the s3 credentials. Secret should be accessible to this task.
+        ---
+        apiVersion: v1
+        kind: Secret
+        metadata:
+          name: XXXX
+          labels:
+            app.kubernetes.io/component: XXXX
+        type: Opaque
+        data:
+          download-url: ${download_url}  
+          upload-url: ${upload_url}  
+          bucket: ${bucket_value}  
+          access-key: ${access_key}
+          secret-key: ${secret_key}
+      mountPath: /opt/s3-credentials
 
+  params:
+    # SCM params
+    - name: crc-scm
+      default: https://github.com/code-ready/crc.git
+    - name: crc-scm-ref 
+      default: main
+    - name: crc-scm-pr
+      default: "''"
+
+    # Target params
+    - name: s3-folder-path
+      default: 'crc-binaries'
+    
   results:
-  - name: downloadable-base-url
-    description: base url where the installer and the shasumfile can be downloaded
-  - name: distributable-name
-    description: distributable file name for the installer
-  - name: shasumfile
-    description: shasumfile name 
+    - name: downloadable-base-url
+      description: base url where the installer and the shasumfile can be downloaded
+    - name: distributable-name
+      description: distributable file name for the installer
+    - name: shasumfile
+      description: shasumfile name 
 
   steps:
-  - name: build
-    # cimage and cversion values should be passed to the template
-    image: cimage:cversion-linux
-    imagePullPolicy: Always
-    script: |
-        #!/bin/sh
-        DATALAKE_URL=$(params.s3-url)
-        DATALAKE_ACCESS_KEY=$(params.s3-access-key)
-        DATALAKE_SECRET_KEY=$(params.s3-secret-key)
+    - name: build
+      # cimage and cversion values should be passed to the template
+      image: cimage:cversion-linux
+      imagePullPolicy: Always
+      script: |
+          #!/bin/sh
 
-        # Optionals
-        if [[ $(params.crc-scm) != "" ]]; then
+          # SCM
           CRC_SCM=$(params.crc-scm)
-        fi
-        if [[ $(params.crc-scm-pr) != "" ]]; then
-          CRC_SCM_PR=$(params.crc-scm-pr)
-        fi
-        if [[ $(params.crc-scm-ref) != "" ]]; then
           CRC_SCM_REF=$(params.crc-scm-ref)
-        fi
-        if [[ $(params.s3-folder-path) != "" ]]; then
-          UPLOAD_PATH=$(params.s3-folder-path)
-        fi
+          if [[ $(params.crc-scm-pr) != "" ]]; then
+            CRC_SCM_PR=$(params.crc-scm-pr)
+          fi
+          DATALAKE_URL=$(cat /opt/s3-credentials/upload-url)
+          DATALAKE_ACCESS_KEY=$(cat /opt/s3-credentials/access-key)
+          DATALAKE_SECRET_KEY=$(cat /opt/s3-credentials/secret-key)
+          UPLOAD_PATH=$(cat /opt/s3-credentials/bucket)/$(params.s3-folder-path)
+            
+          # Build installer
+          DEBUG=true 
+          . entrypoint.sh
+          if [[ $? -ne 0 ]]; then 
+            exit 1
+          fi
 
-        # Build installer
-        DEBUG=true 
-        . entrypoint.sh
-
-         if [[ $? -ne 0 ]]; then 
-          exit 1
-        fi
-
-        # From entrypoint we can get UPLOAD_PATH env with the target bucket 
-        echo -n "$(params.s3-download-url)/${UPLOAD_PATH}" | tee $(results.downloadable-base-url.path)
-        # Linux generated files
-        echo -n "crc-linux-amd64.tar.xz" | tee $(results.distributable-name.path)
-        echo -n "crc-linux-amd64.tar.xz.sha256sum" | tee $(results.shasumfile.path)
-    resources:      
-      requests:
-        memory: 450Mi
-        cpu: 250m
-      limits:
-        memory: 3800Mi
-        cpu: 1850m
-    timeout: 900m
+          # From entrypoint we can get UPLOAD_PATH env with the target bucket 
+          echo -n "$(cat /opt/s3-credentials/download-url)/$(params.s3-folder-path)" | tee $(results.downloadable-base-url.path)
+          # Linux generated files
+          echo -n "crc-linux-amd64.tar.xz" | tee $(results.distributable-name.path)
+          echo -n "crc-linux-amd64.tar.xz.sha256sum" | tee $(results.shasumfile.path)
+      resources:      
+        requests:
+          memory: 450Mi
+          cpu: 250m
+        limits:
+          memory: 3800Mi
+          cpu: 1850m
+      timeout: 900m
