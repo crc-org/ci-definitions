@@ -7,6 +7,8 @@ param(
     $crcSCMPR,
     [Parameter(HelpMessage='crc scm ref')]
     $crcSCMRef="main",
+    [Parameter(HelpMessage='folder on the remote target to move all assets to run the builder')]
+    $targetFolder="crc-builder",
     [Parameter(HelpMessage='upload path on remote storage where upload the artifacts')]
     $uploadPath,
     [Parameter(Mandatory,HelpMessage='url for remote s3 compatible storage where build bits will be stored')]
@@ -52,6 +54,8 @@ function Get-UploadPath($crcVersion, $crcSCMPR, $crcSCMRef) {
 #######################
 ####### MAIN ##########
 #######################
+
+cd $targetFolder
 
 # Custom setup for git
 git config --global http.version "HTTP/1.1"

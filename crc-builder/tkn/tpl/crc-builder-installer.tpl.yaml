@@ -70,6 +70,9 @@ spec:
       default: main
     - name: crc-scm-pr
       default: "''"
+    # Target params
+    - name: s3-folder-path
+      default: 'crc-binaries'
     # Control params
     - name: debug
       description: debug purposes extend verbosity on cmds executed on the target
@@ -112,6 +115,7 @@ spec:
           if [[ $(params.crc-scm-pr) != "" ]]; then
             cmd+="-crcSCMPR $(params.crc-scm-pr) "
           fi
+          cmd+="-targetFolder ${TARGET_FOLDER} "
           cmd+="-uploadPath $(cat /opt/s3-credentials/bucket)/$(params.s3-folder-path) "
           cmd+="-datalakeURL $(cat /opt/s3-credentials/upload-url) "
           cmd+="-datalakeAcessKey $(cat /opt/s3-credentials/access-key) "
@@ -123,7 +127,7 @@ spec:
             exit 1
           fi
 
-          echo -n "$(params.s3-download-url)" \
+          echo -n "$(cat /opt/s3-credentials/download-url)/$(params.s3-folder-path)" \
             | tee $(results.downloadable-base-url.path)
           case "$(params.os)" in
           macos|darwin)

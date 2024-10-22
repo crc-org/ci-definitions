@@ -15,7 +15,6 @@ RUN microdnf -y install git make gcc libvirt-devel perl-Digest-SHA xz findutils 
     && chmod +x /usr/local/bin/mc \
     && rm /tmp/${GO_VERSION}.tar.gz
     
-COPY lib/common.sh /usr/local/bin
 COPY lib/linux/entrypoint.sh /usr/local/bin/entrypoint.sh
 
 ENTRYPOINT entrypoint.sh
