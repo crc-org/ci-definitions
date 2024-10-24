@@ -1,0 +1,74 @@
+name: crc-support-pusher
+
+on:
+  workflow_run:
+    workflows: [ 'crc-support-builder' ]
+    types:
+      - completed
+  
+jobs:
+  push:
+    name: push
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Download crc-support assets
+        uses: actions/download-artifact@v4
+        with:
+          name: crc-support
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      - name: Get crc-support build informaiton
+        run: |
+          echo "source_event=$(cat crc-support-build-event)" >> "$GITHUB_ENV"
+          echo "image=$(cat crc-support-image)" >> "$GITHUB_ENV"
+
+      - name: Log in to ghcr.io
+        if: ${{ env.source_event == 'pull_request' }}
+        uses: redhat-actions/podman-login@v1
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Log in quay.io
+        if: ${{ env.source_event == 'push' }}
+        uses: redhat-actions/podman-login@v1
+        with:
+          registry: quay.io
+          username: ${{ secrets.QUAY_IO_USERNAME }}
+          password: ${{ secrets.QUAY_IO_PASSWORD }}
+
+      - name: Push crc-support
+        run: |
+          # Load 
+          podman load -i crc-support-linux.tar 
+          podman load -i crc-support-windows.tar 
+          podman load -i crc-support-darwin.tar 
+          # Push
+          podman push ${{ env.image }}-linux
+          podman push ${{ env.image }}-windows
+          podman push ${{ env.image }}-darwin
+
+      - name: Download crc-support-tkn assets
+        uses: actions/download-artifact@v4
+        with:
+          name: crc-support-tkn
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      - name: Push crc-support-tkn
+        env:
+          TKN_VERSION: '0.37.0'
+        run: |
+          curl -LO "https://github.com/tektoncd/cli/releases/download/v${TKN_VERSION}/tkn_${TKN_VERSION}_Linux_x86_64.tar.gz"
+          tar xvzf "tkn_${TKN_VERSION}_Linux_x86_64.tar.gz" tkn
+          ./tkn bundle push ${{ env.image }}-tkn \
+            -f crc-support-installer.yaml \
+            -f crc-support.yaml
+
+      

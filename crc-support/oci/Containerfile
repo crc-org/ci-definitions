@@ -1,0 +1,11 @@
+# v0.0.7
+FROM quay.io/rhqp/deliverest@sha256:67ed1a47f1580141854c5baa742a50fc21920cf77d9d07eb798d7743508e52eb
+
+LABEL org.opencontainers.image.authors="CRCQE <devtools-crc-qe@redhat.com>"
+
+ARG OS 
+
+ENV ASSETS_FOLDER=/opt/crc-support \
+    OS=${OS} 
+
+COPY /lib/${OS}/* ${ASSETS_FOLDER}/
