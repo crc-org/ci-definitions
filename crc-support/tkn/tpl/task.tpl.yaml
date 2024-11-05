@@ -1,0 +1,141 @@
+---
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: crc-support
+  labels:
+    app.kubernetes.io/version: "cversion"
+    redhat.com/product: openshift-local
+    dev.lifecycle.io/phase: testing
+  annotations:
+    tekton.dev/pipelines.minVersion: "0.44.x"
+    tekton.dev/categories: "openshift-local"
+    tekton.dev/tags: "openshift-local, testing"
+    tekton.dev/platforms: "linux/amd64"
+spec:
+  description: >-
+    This task will prepare a target host with valid openshift local related assets
+
+    It will download and install an specific Openshift Local version or can be used to download a specific bundle
+
+  workspaces:
+    - name: host-info
+      description: |
+        ocp secret holding the hsot info credentials. Secret should be accessible to this task.
+        ---
+        apiVersion: v1
+        kind: Secret
+        metadata:
+          name: XXXX
+          labels:
+            app.kubernetes.io/component: XXXX
+        type: Opaque
+        data:
+          host: XXXX
+          user: XXXX
+          password: XXXX
+          key: XXXX
+          platform: XXXX
+          os-version: XXXX
+          arch: XXXX
+          os: XXXX
+      mountPath: /opt/host/
+  
+  params:
+    # OS parameter
+    - name: os
+      description: type of platform per target host (windows, darwin or linux). Default linux
+      default: linux
+    # Assets parameter
+    - name: asset-base-url
+      description: base url for the asset to be downloaded
+    - name: asset-name
+      description: name for the asset to be downloaded
+    - name: asset-shasum-name
+      description: file name for shasum to check asset
+      default: sha256sum.txt
+    - name: crc-version
+      description: Optional parameter to give info about crc version managed as version is not present within the asset name.
+      # Main stands for version being built from main of the head
+      default: main
+    # Control parameters
+    - name: download
+      description: controls if preparer will download the element
+      default: 'true'
+    - name: install
+      description: controls if preparer will install. (In case of distriutable)
+      default: 'true'
+    - name: force-fresh
+      description: controls if preparer will remove any previous existing crc version
+      default: 'true'
+    - name: debug
+      description: increase verbosity
+      default: 'false'
+
+  results:
+    - name: target-path
+      description: Path on target host where the item has been dowloaded
+    
+  steps:
+  - name: preparer
+    image: cimage:cversion-$(params.os) 
+    imagePullPolicy: Always
+    script: |
+      #!/bin/bash
+
+      if [ "$(params.debug)" = "true" ]; then
+        set -xuo 
+      fi
+
+      # Prepare ENVs
+      SECONDS=0
+      DEBUG=$(params.debug)
+      TARGET_HOST=$(cat /opt/host/host)
+      TARGET_HOST_USERNAME=$(cat /opt/host/user)
+      cp /opt/host/key id_rsa
+      chmod 600 id_rsa
+      TARGET_HOST_KEY_PATH=id_rsa
+      TARGET_FOLDER=crc-support-$RANDOM$RANDOM
+      TARGET_CLEANUP='true'
+      
+      # Create cmd per OS
+      runner="run.sh"
+      if [[ $(params.os) == "windows" ]]; then
+        runner="run.ps1"
+      fi
+      # Path for assets on remote target
+      tPath='/Users/${TARGET_HOST_USERNAME}/OpenshiftLocal'
+      if [[ $(params.os) == 'linux' ]]; then
+        tPath="/home/${TARGET_HOST_USERNAME}/OpenshiftLocal"
+      fi
+      if [[ $(params.asset-name) == *'.crcbundle' ]]; then
+        # It is bundle
+        nameArr=(${name//_/ })
+        tPath+='/bundle/${nameArr[2]}'
+      else
+        tPath+='/crc/$(params.crc-version)'
+      fi
+
+      cmd="${TARGET_FOLDER}/${runner} -targetPath $tPath "
+      cmd+="-aBaseURL $(params.asset-base-url) "
+      cmd+="-aName $(params.asset-name) "
+      cmd+="-aSHAName $(params.asset-shasum-name) "
+      cmd+="-freshEnv $(params.force-fresh) "
+      cmd+="-download $(params.download) "
+      cmd+="-install $(params.install) "
+      cmd+="-debug $(params.debug) "
+      
+      # Exec
+      . entrypoint.sh "${cmd}"
+
+      # Results
+      echo -n "$tPath" | tee $(results.target-path.path)
+
+    resources:      
+      requests:
+        memory: "100Mi"
+        cpu: "50m"
+      limits:
+        memory: "140Mi"
+        cpu: "100m"
+  

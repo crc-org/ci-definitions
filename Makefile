@@ -107,4 +107,46 @@ endif
 		-f crc-builder/tkn/crc-builder-installer.yaml \
 		-f crc-builder/tkn/crc-builder.yaml \ 
 		-f crc-builder/tkn/crc-builder-arm64.yaml
- 	
+
+#### crc-support ####
+
+.PHONY: crc-support-oci-build crc-support-oci-save crc-support-oci-load crc-support-oci-push crc-support-tkn-create crc-support-tkn-push
+
+# Registries and versions
+CRC_SUPPORT ?= $(shell sed -n 1p crc-support/release-info)
+CRC_SUPPORT_V ?= v$(shell sed -n 2p crc-support/release-info)
+CRC_SUPPORT_SAVE ?= crc-support
+
+crc-support-oci-build: CONTEXT=crc-support/oci
+crc-support-oci-build: MANIFEST=$(CRC_SUPPORT):$(CRC_SUPPORT_V)
+crc-support-oci-build:
+	${CONTAINER_MANAGER} build -t $(MANIFEST)-linux -f $(CONTEXT)/Containerfile --build-arg=OS=linux $(CONTEXT)
+	${CONTAINER_MANAGER} build -t $(MANIFEST)-windows -f $(CONTEXT)/Containerfile --build-arg=OS=windows $(CONTEXT)
+	${CONTAINER_MANAGER} build -t $(MANIFEST)-darwin -f $(CONTEXT)/Containerfile --build-arg=OS=darwin $(CONTEXT)
+
+crc-support-oci-save: MANIFEST=$(CRC_SUPPORT):$(CRC_SUPPORT_V)
+crc-support-oci-save:
+	${CONTAINER_MANAGER} save -o $(CRC_SUPPORT_SAVE)-linux.tar $(MANIFEST)-linux
+	${CONTAINER_MANAGER} save -o $(CRC_SUPPORT_SAVE)-windows.tar $(MANIFEST)-windows
+	${CONTAINER_MANAGER} save -o $(CRC_SUPPORT_SAVE)-darwin.tar $(MANIFEST)-darwin
+
+crc-support-oci-load:
+	${CONTAINER_MANAGER} load -i $(CRC_SUPPORT_SAVE)-linux.tar 
+	${CONTAINER_MANAGER} load -i $(CRC_SUPPORT_SAVE)-windows.tar 
+	${CONTAINER_MANAGER} load -i $(CRC_SUPPORT_SAVE)-darwin.tar 
+
+crc-support-oci-push: MANIFEST=$(CRC_SUPPORT):$(CRC_SUPPORT_V)
+crc-support-oci-push:
+	${CONTAINER_MANAGER} push $(MANIFEST)-linux
+	${CONTAINER_MANAGER} push $(MANIFEST)-windows
+	${CONTAINER_MANAGER} push $(MANIFEST)-darwin
+
+crc-support-tkn-create:
+	$(call tkn_template,$(CRC_SUPPORT),$(CRC_SUPPORT_V),crc-support,task)
+
+crc-support-tkn-push: install-out-of-tree-tools
+ifndef IMAGE
+	IMAGE = $(CRC_SUPPORT):$(CRC_SUPPORT_V)
+endif
+	$(TOOLS_BINDIR)/tkn bundle push $(IMAGE)-tkn \
+		-f crc-support/tkn/task.yaml

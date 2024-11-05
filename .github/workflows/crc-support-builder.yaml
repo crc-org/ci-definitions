@@ -1,0 +1,89 @@
+name: crc-support-builder
+
+on:
+  push:
+    tags: [ 'crc-support-v*' ]       
+  pull_request:
+    branches: [ main ]
+    paths: ['Makefile', 'crc-support/**', '.github\/workflows\/crc-support*' ]
+      
+jobs:
+  build:
+    name: build
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build image for PR
+        if: ${{ github.event_name == 'pull_request' }}
+        env:
+          CRC_SUPPORT: ghcr.io/crc-org/ci-crc-support
+          CRC_SUPPORT_V: pr-${{ github.event.number }}
+        run: |
+          make crc-support-oci-build
+          make crc-support-oci-save
+          echo "image=${CRC_SUPPORT}:${CRC_SUPPORT_V}" >> "$GITHUB_ENV"
+  
+      - name: Build image for Release
+        if: ${{ github.event_name == 'push' }}
+        run: |
+          make crc-support-oci-build
+          make crc-support-oci-save
+          echo "image=$(sed -n 1p crc-support/release-info):v$(sed -n 2p crc-support/release-info)" >> "$GITHUB_ENV"
+
+      - name: Create image metadata
+        run: |
+          echo ${{ env.image }} > crc-support-image
+          echo ${{ github.event_name }} > crc-support-build-event
+  
+      - name: Upload crc-support
+        uses: actions/upload-artifact@v4
+        with:
+          name: crc-support
+          path: crc-support*
+
+  tkn-check:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Template tkn for PR
+        if: ${{ github.event_name == 'pull_request' }}
+        env:
+          CRC_SUPPORT: ghcr.io/crc-org/ci-crc-support
+          CRC_SUPPORT_V: pr-${{ github.event.number }}
+        run: |
+          make crc-support-tkn-create
+
+      - name: Check tkn specs
+        run: |
+          if [[ ! -f crc-support/tkn/task.yaml ]]; then 
+            exit 1
+          fi
+          # Check if version is in sync
+
+      - name: Create k8s Kind Cluster
+        uses: helm/kind-action@v1
+    
+        # https://docs.openshift.com/pipelines/1.15/about/op-release-notes.html
+      - name: Deploy min supported tekton version
+        run: kubectl apply -f https://storage.googleapis.com/tekton-releases/pipeline/previous/v0.44.5/release.yaml
+    
+      - name: Deploy tasks
+        run: |
+          kubectl apply -f crc-support/tkn/task.yaml
+
+      - name: Upload crc-support-tkn
+        uses: actions/upload-artifact@v4
+        with:
+          name: crc-support-tkn
+          path: crc-support/tkn/crc-support*
+
+
+
+
+
+
+     
