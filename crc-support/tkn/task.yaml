@@ -4,7 +4,7 @@ kind: Task
 metadata:
   name: crc-support
   labels:
-    app.kubernetes.io/version: "v1.0.0-dev"
+    app.kubernetes.io/version: "v2.0.0-dev"
     redhat.com/product: openshift-local
     dev.lifecycle.io/phase: testing
   annotations:
@@ -78,7 +78,7 @@ spec:
     
   steps:
   - name: preparer
-    image: quay.io/crc-org/ci-crc-support:v1.0.0-dev-$(params.os) 
+    image: quay.io/crc-org/ci-crc-support:v2.0.0-dev-$(params.os) 
     imagePullPolicy: Always
     script: |
       #!/bin/bash
