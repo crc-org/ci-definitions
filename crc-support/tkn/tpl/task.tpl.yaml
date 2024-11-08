@@ -110,8 +110,9 @@ spec:
       fi
       if [[ $(params.asset-name) == *'.crcbundle' ]]; then
         # It is bundle
+        name=$(params.asset-name)
         nameArr=(${name//_/ })
-        tPath+='/bundle/${nameArr[2]}'
+        tPath+="/bundle/${nameArr[2]}"
       else
         tPath+='/crc/$(params.crc-version)'
       fi
