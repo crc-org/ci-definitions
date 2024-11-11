@@ -29,5 +29,9 @@ check_download() {
 
 # $1 file name for crc installer
 installCRC() {
-    sudo tar xvf "${1}" --strip-components 1 -C /usr/local/bin/
+    if [[ ${1} == *.tar.xz ]]; then
+        sudo tar xvf "${1}" --strip-components 1 -C /usr/local/bin/
+    else
+        sudo cp ${1} /usr/local/bin/
+    fi
 }
