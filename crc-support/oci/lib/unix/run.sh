@@ -85,15 +85,13 @@ fi
 if [[ $freshEnv == 'true' ]]; then
     echo "removing previous crc"
     force_fresh_environment
-fi
-
-mkdir -p $targetPath
-pushd $targetPath
+fi 
 
 # DOWNLOAD
 if [[ $download == "true" ]]; then
     echo "downlading $aName"
-    
+    mkdir -p $targetPath
+    pushd $targetPath
     # Download sha256sum
     curl --insecure -LO "$aBaseURL/$aSHAName"
     # Check if require download
@@ -104,7 +102,8 @@ if [[ $download == "true" ]]; then
         dURL="$aBaseURL/$aName"
         download $dURL
         check_download $aName $aSHAName
-        if [[ ${?} -ne 0 ]]; then 
+        if [[ ${?} -ne 0 ]]; then
+            popd 
             echo "Error with downloading $aName"
             exit 1
         fi
