@@ -4,7 +4,7 @@ kind: Task
 metadata:
   name: crc-support
   labels:
-    app.kubernetes.io/version: "v1.0.0"
+    app.kubernetes.io/version: "v1.0.1"
     redhat.com/product: openshift-local
     dev.lifecycle.io/phase: testing
   annotations:
@@ -78,7 +78,7 @@ spec:
     
   steps:
   - name: preparer
-    image: quay.io/crc-org/ci-crc-support:v1.0.0-$(params.os) 
+    image: quay.io/crc-org/ci-crc-support:v1.0.1-$(params.os) 
     imagePullPolicy: Always
     script: |
       #!/bin/bash
@@ -116,7 +116,6 @@ spec:
       else
         tPath+="/crc/$(params.crc-version)"
       fi
-
 
       cmd="${TARGET_FOLDER}/${runner} -targetPath $tPath "
       cmd+="-aBaseURL $(params.asset-base-url) "
