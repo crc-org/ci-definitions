@@ -79,7 +79,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: crc-support-tkn
-          path: crc-support/tkn/crc-support*
+          path: crc-support/tkn/task.yaml
 
 
 
