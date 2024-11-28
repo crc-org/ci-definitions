@@ -1,3 +1,4 @@
+$ErrorActionPreference = "Stop"
 # Script to be executed on windows machine to build a crc windows installer
 # and upload it to s3 compatible storage
 param(
