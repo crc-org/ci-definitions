@@ -125,7 +125,6 @@ spec:
       cmd+="-freshEnv $(params.force-fresh) "
       cmd+="-download $(params.download) "
       cmd+="-install $(params.install) "
-      cmd+="-debug $(params.debug) "
       
       # Exec
       . entrypoint.sh "${cmd}"
