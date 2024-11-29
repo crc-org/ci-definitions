@@ -104,7 +104,7 @@ spec:
         runner="run.ps1"
       fi
       # Path for assets on remote target
-      tPath='/Users/${TARGET_HOST_USERNAME}/OpenshiftLocal'
+      tPath="/Users/${TARGET_HOST_USERNAME}/OpenshiftLocal"
       if [[ $(params.os) == 'linux' ]]; then
         tPath="/home/${TARGET_HOST_USERNAME}/OpenshiftLocal"
       fi
@@ -114,7 +114,7 @@ spec:
         nameArr=(${name//_/ })
         tPath+="/bundle/${nameArr[2]}"
       else
-        tPath+='/crc/$(params.crc-version)'
+        tPath+="/crc/$(params.crc-version)"
       fi
 
 
@@ -125,7 +125,6 @@ spec:
       cmd+="-freshEnv $(params.force-fresh) "
       cmd+="-download $(params.download) "
       cmd+="-install $(params.install) "
-      cmd+="-debug $(params.debug) "
       
       # Exec
       . entrypoint.sh "${cmd}"

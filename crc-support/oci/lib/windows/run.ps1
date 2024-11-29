@@ -1,23 +1,14 @@
-aBaseURL=''
-aName=''
-aSHAName='sha256sum.txt'
-targetPath=''
-freshEnv='true'
-download='true'
-install='false'
-
-
 param(
     [Parameter(HelpMessage='download base url')]
     $aBaseURL,
     [Parameter(HelpMessage='asset name to be downloaded')]
     $aName,
     [Parameter(HelpMessage='shasumFile file name Default value: sha256sum.txt')]
-    $aSHAName="sha256sum.txt",
+    $aSHAName='sha256sum.txt',
     [Parameter(Mandatory,HelpMessage='target folder for download')]
     $targetPath,
     [Parameter(HelpMessage='force fresh, remove any previous existing instance for crc. Default False')]
-    $forceFresh='false',
+    $freshEnv='false',
     [Parameter(HelpMessage='download if False not download. Default True')]
     $download='true',
     [Parameter(HelpMessage='install after downloading if False not install. Default False')]
@@ -32,7 +23,7 @@ function Force-Fresh-Environment {
         # Wait to be cleared before uninstalling
         Pause-Until-Other-Installations-Finish
         pushd $latestPath
-        Start-Process C:\Windows\System32\msiexec.exe -ArgumentList "/qb /x crc-windows-${arch}.msi /norestart" -wait
+        Start-Process C:\Windows\System32\msiexec.exe -ArgumentList "/qb /x crc-windows-amd64.msi /norestart" -wait
         popd
 	} 
     Start-Process powershell -Verb runAs -ArgumentList "Remove-Item -Recurse -Force $HOME\.crc"
@@ -41,11 +32,11 @@ function Force-Fresh-Environment {
 }
 
 function Require-Download {
-    if (!(Test-Path $downloadItemName)) {
+    if (!(Test-Path $aName)) {
         return $true
     }
-    $hashValue=Get-FileHash $downloadItemName | Select-Object -ExpandProperty Hash
-    $hashMatch=Select-String $shasumFile -Pattern $hashValue -Quiet
+    $hashValue=Get-FileHash $aName | Select-Object -ExpandProperty Hash
+    $hashMatch=Select-String $aSHAName -Pattern $hashValue -Quiet
     return !$hashMatch
 }
 
@@ -59,8 +50,8 @@ function Download ($binaryURL) {
 }
 
 function Check-Download() {
-    $hashValue=Get-FileHash $downloadItemName | Select-Object -ExpandProperty Hash
-    $hashMatch=Select-String $shasumFile -Pattern $hashValue -Quiet
+    $hashValue=Get-FileHash $aName | Select-Object -ExpandProperty Hash
+    $hashMatch=Select-String $aSHAName -Pattern $hashValue -Quiet
     return $hashMatch
 } 
 
@@ -87,10 +78,10 @@ $latestPath="$HOME\OpenshiftLocal\crc\latest"
 # Transform params to bool
 $install = If ($install -eq 'true') {$true} Else {$false}
 $download = If ($download -eq 'true') {$true} Else {$false}
-$forceFresh = If ($forceFresh -eq 'true') {$true} Else {$false}
+$freshEnv = If ($freshEnv -eq 'true') {$true} Else {$false}
 
 # FORCE FRESH
-if ($forceFresh) {
+if ($freshEnv) {
     Force-Fresh-Environment
 }
 
