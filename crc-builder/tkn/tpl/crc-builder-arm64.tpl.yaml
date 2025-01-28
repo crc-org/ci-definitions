@@ -86,7 +86,7 @@ spec:
 
   steps:
     - name: provisioner
-      image: quay.io/redhat-developer/mapt:v0.7.2
+      image: quay.io/redhat-developer/mapt:v0.7.4
       script: |
         #!/bin/sh
         set -x
@@ -188,7 +188,7 @@ spec:
           cpu: 250m
       timeout: 900m
     - name: decommission
-      image: quay.io/redhat-developer/mapt:v0.7.2
+      image: quay.io/redhat-developer/mapt:v0.7.4
       onError: continue
       script: |
         #!/bin/sh
