@@ -252,7 +252,7 @@ spec:
         workspace: aws-credentials
       - name: rh-account-secret
         workspace: rh-account-secret
-      timeout: "20m" 
+      timeout: "45m" 
     - name: print-decomission
       when:
         - input: $(params.debug)
