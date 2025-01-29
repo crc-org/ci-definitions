@@ -4,8 +4,8 @@ kind: Task
 metadata:
   name: snc-runner
   labels:
-    # v1.0.1 values should be passed to the template
-    app.kubernetes.io/version: "v1.0.1"
+    # v1.0.2 values should be passed to the template
+    app.kubernetes.io/version: "v1.0.2"
     redhat.com/product: openshift-local
     dev.lifecycle.io/phase: build
     openshift-local.redhat.com/component: bundle
@@ -91,8 +91,8 @@ spec:
       
   steps:
     - name: runner
-      # quay.io/crc-org/ci-snc-runner and v1.0.1 values should be passed to the template
-      image: quay.io/crc-org/ci-snc-runner:v1.0.1
+      # quay.io/crc-org/ci-snc-runner and v1.0.2 values should be passed to the template
+      image: quay.io/crc-org/ci-snc-runner:v1.0.2
       imagePullPolicy: Always
       script: |
         #!/bin/bash

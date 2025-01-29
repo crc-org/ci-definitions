@@ -4,7 +4,7 @@ kind: Pipeline
 metadata:
   name: snc-builder
   labels:
-    app.kubernetes.io/version: "v1.0.1"
+    app.kubernetes.io/version: "v1.0.2"
     redhat.com/product: openshift-local
     dev.lifecycle.io/phase: build
     openshift-local.redhat.com/component: bundle
@@ -136,7 +136,8 @@ spec:
               #!/bin/sh
               echo -n $RANDOM$RANDOM | tee $(results.correlation.path)
               index_url=$(params.ocp-index-url)
-              echo -n ${index_url##*/} | tee $(results.ocp-version.path)
+              version=${index_url##*/}
+              echo -n ${version} | tee $(results.ocp-version.path)
               echo -n ${index_url/\/$version/''} | tee $(results.ocp-mirror.path)
       params:
         - name: ocp-index-url
@@ -150,7 +151,7 @@ spec:
           - name: url
             value: https://github.com/redhat-developer/mapt.git
           - name: revision
-            value: v0.7.1
+            value: v0.7.4
           - name: pathInRepo
             value: tkn/infra-aws-rhel.yaml
       params:
@@ -185,7 +186,7 @@ spec:
           - name: url
             value: https://github.com/crc-org/ci-definitions.git
           - name: revision
-            value: snc-runner-v1.0.1
+            value: snc-runner-v1.0.2
           - name: pathInRepo
             value: snc-runner/tkn/task.yaml
       params:
@@ -233,7 +234,7 @@ spec:
           - name: url
             value: https://github.com/redhat-developer/mapt.git
           - name: revision
-            value: v0.7.1
+            value: v0.7.4
           - name: pathInRepo
             value: tkn/infra-aws-rhel.yaml
       params:
@@ -252,7 +253,7 @@ spec:
         workspace: aws-credentials
       - name: rh-account-secret
         workspace: rh-account-secret
-      timeout: "20m" 
+      timeout: "45m" 
     - name: print-decomission
       when:
         - input: $(params.debug)
@@ -284,7 +285,7 @@ spec:
                     - name: url
                       value: https://github.com/redhat-developer/mapt.git
                     - name: revision
-                      value: v0.7.1
+                      value: v0.7.4
                     - name: pathInRepo
                       value: tkn/infra-aws-rhel.yaml
                 params:
