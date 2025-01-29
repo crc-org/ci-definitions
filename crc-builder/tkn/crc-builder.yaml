@@ -4,7 +4,7 @@ kind: Task
 metadata:
   name: crc-builder
   labels:
-    app.kubernetes.io/version: "v1.0.2"
+    app.kubernetes.io/version: "v1.0.3"
     redhat.com/product: openshift-local
     dev.lifecycle.io/phase: build
     openshift-local.redhat.com/component: binary
@@ -61,8 +61,8 @@ spec:
 
   steps:
     - name: build
-      # quay.io/crc-org/ci-crc-builder and v1.0.2 values should be passed to the template
-      image: quay.io/crc-org/ci-crc-builder:v1.0.2-linux
+      # quay.io/crc-org/ci-crc-builder and v1.0.3 values should be passed to the template
+      image: quay.io/crc-org/ci-crc-builder:v1.0.3-linux
       imagePullPolicy: Always
       script: |
           #!/bin/sh

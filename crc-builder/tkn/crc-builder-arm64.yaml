@@ -4,7 +4,7 @@ kind: Task
 metadata:
   name: crc-builder-arm64
   labels:
-    app.kubernetes.io/version: "v1.0.2"
+    app.kubernetes.io/version: "v1.0.3"
     redhat.com/product: openshift-local
     dev.lifecycle.io/phase: build
     openshift-local.redhat.com/component: binary
@@ -86,7 +86,7 @@ spec:
 
   steps:
     - name: provisioner
-      image: quay.io/redhat-developer/mapt:v0.7.2
+      image: quay.io/redhat-developer/mapt:v0.7.4
       script: |
         #!/bin/sh
         set -x
@@ -125,7 +125,7 @@ spec:
           memory: "1000Mi"
           cpu: "400m"
     - name: build
-      # quay.io/crc-org/ci-crc-builder and v1.0.2 values should be passed to the template
+      # quay.io/crc-org/ci-crc-builder and v1.0.3 values should be passed to the template
       image: quay.io/rhqp/support-tools:v0.0.4
       script: |
           #!/bin/sh
@@ -155,7 +155,7 @@ spec:
             cmd+="-e UPLOAD_PATH=$(cat /opt/s3-credentials/bucket)/$(params.s3-folder-path) "
           fi
           cmd+="-e DEBUG=true "
-          cmd+="quay.io/crc-org/ci-crc-builder:v1.0.2-linux-arm64"
+          cmd+="quay.io/crc-org/ci-crc-builder:v1.0.3-linux-arm64"
 
           key=$(workspaces.pipelines-data.path)/fedora/id_rsa
           username=$(cat $(workspaces.pipelines-data.path)/fedora/username)
@@ -188,7 +188,7 @@ spec:
           cpu: 250m
       timeout: 900m
     - name: decommission
-      image: quay.io/redhat-developer/mapt:v0.7.2
+      image: quay.io/redhat-developer/mapt:v0.7.4
       onError: continue
       script: |
         #!/bin/sh
