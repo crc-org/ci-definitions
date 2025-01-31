@@ -136,7 +136,8 @@ spec:
               #!/bin/sh
               echo -n $RANDOM$RANDOM | tee $(results.correlation.path)
               index_url=$(params.ocp-index-url)
-              echo -n ${index_url##*/} | tee $(results.ocp-version.path)
+              version=${index_url##*/}
+              echo -n ${version} | tee $(results.ocp-version.path)
               echo -n ${index_url/\/$version/''} | tee $(results.ocp-mirror.path)
       params:
         - name: ocp-index-url
