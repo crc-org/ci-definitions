@@ -63,7 +63,7 @@ while [[ $# -gt 0 ]]; do
         shift 
         ;;
         -ocp-mirror)
-        MIRROR="$2"
+        export MIRROR="$2"
         shift 
         shift 
         ;;
