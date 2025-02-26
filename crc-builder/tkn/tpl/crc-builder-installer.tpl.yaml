@@ -68,6 +68,8 @@ spec:
       default: https://github.com/code-ready/crc.git
     - name: crc-scm-ref 
       default: main
+    - name: vfkit-scm-ref
+      default: main
     - name: crc-scm-pr
       default: "''"
     # Target params
@@ -115,6 +117,7 @@ spec:
           if [[ $(params.crc-scm-pr) != "" ]]; then
             cmd+="-crcSCMPR $(params.crc-scm-pr) "
           fi
+          cmd+="-vfkitSCMRef $(params.vfkit-scm-ref) "
           cmd+="-targetFolder ${TARGET_FOLDER} "
           cmd+="-uploadPath $(cat /opt/s3-credentials/bucket)/$(params.s3-folder-path) "
           cmd+="-datalakeURL $(cat /opt/s3-credentials/upload-url) "
