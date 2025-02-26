@@ -4,6 +4,7 @@
 crcSCM="https://github.com/code-ready/crc.git"
 crcSCMPR=''
 crcSCMRef='main'
+vfkitSCMRef='main'
 targetFolder="crc-builder"
 uploadPath='crc-binaries'
 datalakeURL=''
@@ -27,6 +28,11 @@ while [[ $# -gt 0 ]]; do
         crcSCMRef="$2"
         shift 
         shift 
+        ;;
+        -vfkitSCMRef)
+        vfkitSCMRef="$2"
+        shift
+        shift
         ;;
         -targetFolder)
         targetFolder="$2"
@@ -119,6 +125,7 @@ make -C admin-helper macos-universal VERSION=$admin_version
 
 # Build vfkit
 git clone https://github.com/code-ready/vfkit.git
+git -C vfkit checkout $vfkitSCMRef
 make -C vfkit all
 
 # Build pkg
