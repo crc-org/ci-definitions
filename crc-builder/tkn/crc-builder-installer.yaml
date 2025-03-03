@@ -4,7 +4,7 @@ kind: Task
 metadata:
   name: crc-builder-installer
   labels:
-    app.kubernetes.io/version: "v1.0.3"
+    app.kubernetes.io/version: "v1.0.4"
     redhat.com/product: openshift-local
     dev.lifecycle.io/phase: build
     openshift-local.redhat.com/component: installer
@@ -68,6 +68,8 @@ spec:
       default: https://github.com/code-ready/crc.git
     - name: crc-scm-ref 
       default: main
+    - name: vfkit-scm-ref
+      default: main
     - name: crc-scm-pr
       default: "''"
     # Target params
@@ -88,8 +90,8 @@ spec:
 
   steps:
     - name: crc-executable-builder
-      # quay.io/crc-org/ci-crc-builder and v1.0.3 values should be passed to the template
-      image: quay.io/crc-org/ci-crc-builder:v1.0.3-$(params.os) 
+      # quay.io/crc-org/ci-crc-builder and v1.0.4 values should be passed to the template
+      image: quay.io/crc-org/ci-crc-builder:v1.0.4-$(params.os) 
       imagePullPolicy: Always
       script: |
           #!/bin/sh
@@ -115,6 +117,7 @@ spec:
           if [[ $(params.crc-scm-pr) != "" ]]; then
             cmd+="-crcSCMPR $(params.crc-scm-pr) "
           fi
+          cmd+="-vfkitSCMRef $(params.vfkit-scm-ref) "
           cmd+="-targetFolder ${TARGET_FOLDER} "
           cmd+="-uploadPath $(cat /opt/s3-credentials/bucket)/$(params.s3-folder-path) "
           cmd+="-datalakeURL $(cat /opt/s3-credentials/upload-url) "
