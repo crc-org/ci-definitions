@@ -1,4 +1,3 @@
-$ErrorActionPreference = "Stop"
 # Script to be executed on windows machine to build a crc windows installer
 # and upload it to s3 compatible storage
 param(
@@ -20,7 +19,8 @@ param(
     $datalakeSecretKey
 )
 
-# Upload content to S3 compatible 
+$ErrorActionPreference = "Stop"
+# Upload content to S3 compatible
 # $1 remote path
 # $2 local path to be uploaded
 function S3-Upload($uploadPath, $localPath) {
