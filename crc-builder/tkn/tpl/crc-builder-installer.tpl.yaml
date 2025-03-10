@@ -69,7 +69,7 @@ spec:
     - name: crc-scm-ref 
       default: main
     - name: vfkit-scm-ref
-      default: main
+      default: "''"
     - name: crc-scm-pr
       default: "''"
     # Target params
