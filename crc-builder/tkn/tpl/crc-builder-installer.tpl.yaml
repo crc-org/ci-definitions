@@ -117,7 +117,9 @@ spec:
           if [[ $(params.crc-scm-pr) != "" ]]; then
             cmd+="-crcSCMPR $(params.crc-scm-pr) "
           fi
-          cmd+="-vfkitSCMRef $(params.vfkit-scm-ref) "
+          if [[ $(params.vfkit-scm-ref) != "" ]]; then
+            cmd+="-vfkitSCMRef $(params.vfkit-scm-ref) "
+          fi
           cmd+="-targetFolder ${TARGET_FOLDER} "
           cmd+="-uploadPath $(cat /opt/s3-credentials/bucket)/$(params.s3-folder-path) "
           cmd+="-datalakeURL $(cat /opt/s3-credentials/upload-url) "
