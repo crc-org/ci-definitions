@@ -12,7 +12,7 @@ RUN cd /tmp && \
     fi;
     
 #v0.0.6
-FROM quay.io/rhqp/deliverest@sha256:016f766cac1bb644e1415b1ebb34504394ba0806d52679a55a0ef1162edabb47 
+FROM quay.io/devtools-qe-incubator/deliverest:v0.0.7
 
 LABEL org.opencontainers.image.authors="CRCQE <devtools-crc-qe@redhat.com>"
 
