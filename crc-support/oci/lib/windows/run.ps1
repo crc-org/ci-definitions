@@ -110,6 +110,14 @@ if ($download) {
     }
 }
 
+if ($delete) {
+    cd ..
+    ls
+    Write-Host "removing 10 days ago folders "
+    Get-ChildItem -Path . -Directory | Where-Object {($_.LastWriteTime -lt (Get-Date).AddDays(-10))} | Remove-Item -Recurse -Force
+    ls
+    pushd $targetPath
+}
 
 # INSTALLATION
 if ($install) {
@@ -138,14 +146,6 @@ if ($install) {
     Start-Process powershell -verb runas -ArgumentList "Restart-Computer -Force" -wait
     # Workaround on non required reboot contolled env
     #$Env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine")
-}
-
-if ($delete) {
-    cd ..
-    ls
-    Write-Host "removing 10 days ago folders "
-    Get-ChildItem -Path . -Directory | Where-Object {($_.LastWriteTime -lt (Get-Date).AddDays(-10))} | Remove-Item -Recurse -Force
-    ls
 }
 
 popd
