@@ -21,6 +21,7 @@ endef
 SNC_RUNNER ?= $(shell sed -n 1p snc-runner/release-info)
 SNC_RUNNER_V ?= v$(shell sed -n 2p snc-runner/release-info)
 SNC_RUNNER_SAVE ?= snc-runner
+SNC_RUNNER_IMAGE = $(SNC_RUNNER):$(SNC_RUNNER_V)
 
 snc-runner-oci-build: CONTEXT=snc-runner/oci
 snc-runner-oci-build: MANIFEST=$(SNC_RUNNER):$(SNC_RUNNER_V)
@@ -34,20 +35,14 @@ snc-runner-oci-load:
 	${CONTAINER_MANAGER} load -i $(SNC_RUNNER_SAVE).tar 
 
 snc-runner-oci-push:
-ifndef IMAGE
-	IMAGE = $(SNC_RUNNER):$(SNC_RUNNER_V)
-endif
-	${CONTAINER_MANAGER} push $(IMAGE)
+	${CONTAINER_MANAGER} push $(SNC_RUNNER_IMAGE)
 
 snc-runner-tkn-create:
 	$(call tkn_template,$(SNC_RUNNER),$(SNC_RUNNER_V),snc-runner,task)
 	$(call tkn_template,$(SNC_RUNNER),$(SNC_RUNNER_V),snc-runner,pipeline)
 
 snc-runner-tkn-push: install-out-of-tree-tools
-ifndef IMAGE
-	IMAGE = $(SNC_RUNNER):$(SNC_RUNNER_V)
-endif
-	$(TOOLS_BINDIR)/tkn bundle push $(IMAGE)-tkn \
+	$(TOOLS_BINDIR)/tkn bundle push $(SNC_RUNNER_IMAGE)-tkn \
 		-f snc-runner/tkn/task.yaml \
 		-f snc-runner/tkn/pipeline.yaml
 
@@ -59,6 +54,7 @@ endif
 CRC_BUILDER ?= $(shell sed -n 1p crc-builder/release-info)
 CRC_BUILDER_V ?= v$(shell sed -n 2p crc-builder/release-info)
 CRC_BUILDER_SAVE ?= crc-builder
+CRC_BUILDER_IMAGE = $(CRC_BUILDER):$(CRC_BUILDER_V)
 
 crc-builder-oci-build: CONTEXT=crc-builder/oci
 crc-builder-oci-build: MANIFEST=$(CRC_BUILDER):$(CRC_BUILDER_V)
@@ -100,10 +96,7 @@ crc-builder-tkn-create:
 	$(call tkn_template,$(CRC_BUILDER),$(CRC_BUILDER_V),crc-builder,crc-builder-arm64)
 
 crc-builder-tkn-push: install-out-of-tree-tools
-ifndef IMAGE
-	IMAGE = $(CRC_BUILDER):$(CRC_BUILDER_V)
-endif
-	$(TOOLS_BINDIR)/tkn bundle push $(IMAGE)-tkn \
+	$(TOOLS_BINDIR)/tkn bundle push $(CRC_BUILDER_IMAGE)-tkn \
 		-f crc-builder/tkn/crc-builder-installer.yaml \
 		-f crc-builder/tkn/crc-builder.yaml \ 
 		-f crc-builder/tkn/crc-builder-arm64.yaml
@@ -116,6 +109,7 @@ endif
 CRC_SUPPORT ?= $(shell sed -n 1p crc-support/release-info)
 CRC_SUPPORT_V ?= v$(shell sed -n 2p crc-support/release-info)
 CRC_SUPPORT_SAVE ?= crc-support
+CRC_SUPPORT_IMAGE = $(CRC_SUPPORT):$(CRC_SUPPORT_V)
 
 crc-support-oci-build: CONTEXT=crc-support/oci
 crc-support-oci-build: MANIFEST=$(CRC_SUPPORT):$(CRC_SUPPORT_V)
@@ -145,8 +139,5 @@ crc-support-tkn-create:
 	$(call tkn_template,$(CRC_SUPPORT),$(CRC_SUPPORT_V),crc-support,task)
 
 crc-support-tkn-push: install-out-of-tree-tools
-ifndef IMAGE
-	IMAGE = $(CRC_SUPPORT):$(CRC_SUPPORT_V)
-endif
-	$(TOOLS_BINDIR)/tkn bundle push $(IMAGE)-tkn \
+	$(TOOLS_BINDIR)/tkn bundle push $(CRC_SUPPORT_IMAGE)-tkn \
 		-f crc-support/tkn/task.yaml
