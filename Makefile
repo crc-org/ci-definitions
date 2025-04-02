@@ -150,3 +150,28 @@ ifndef IMAGE
 endif
 	$(TOOLS_BINDIR)/tkn bundle push $(IMAGE)-tkn \
 		-f crc-support/tkn/task.yaml
+
+
+#### s3-uploader ####
+
+.PHONY: s3-uploader-oci-build s3-uploader-tkn-create
+
+S3_IMAGE ?= $(shell sed -n 1p s3-uploader/release-info)
+S3_VERSION ?= v$(shell sed -n 2p s3-uploader/release-info)
+S3_SAVE ?= s3-uploader
+
+s3-uploader-oci-build: CONTEXT=s3-uploader/oci
+s3-uploader-oci-build: MANIFEST=$(S3_IMAGE):$(S3_VERSION)
+s3-uploader-oci-build:
+	${CONTAINER_MANAGER} build -t $(MANIFEST) -f $(CONTEXT)/Containerfile $(CONTEXT)
+
+s3-uploader-oci-save:  MANIFEST=$(S3_IMAGE):$(S3_VERSION)
+s3-uploader-oci-save:
+	${CONTAINER_MANAGER} save -o $(S3_SAVE).tar $(MANIFEST)
+
+s3-uploader-oci-push: MANIFEST=$(S3_IMAGE):$(S3_VERSION)
+s3-uploader-oci-push:
+	${CONTAINER_MANAGER} push $(MANIFEST)
+
+s3-uploader-tkn-create:
+	$(call tkn_template,$(S3_IMAGE),$(S3_VERSION),s3-uploader,task)

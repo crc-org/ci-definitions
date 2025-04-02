@@ -1,0 +1,83 @@
+---
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: s3-uploader
+  labels:
+    app.kubernetes.io/version: "v1.0.0"
+    redhat.com/product: openshift-local
+    dev.lifecycle.io/phase: testing
+  annotations:
+    tekton.dev/pipelines.minVersion: "0.44.x"
+    tekton.dev/categories: "openshift-local"
+    tekton.dev/tags: "openshift-local, testing"
+    tekton.dev/platforms: "linux/amd64"
+spec:
+  description: >-
+    This task will upload test results to aws s3
+
+  volumes:
+    - name: aws-credentials
+      secret:
+        secretName: $(params.aws-credentials)
+    - name: storage
+      persistentVolumeClaim:
+        claimName: $(params.pvc)
+  
+  params:
+    - name: aws-credentials
+      description: |
+        ocp secret holding the aws credentials. Secret should be accessible to this task.
+        ---
+        apiVersion: v1
+        kind: Secret
+        metadata:
+          name: aws-${name}
+          labels:
+            app.kubernetes.io/component: ${name}
+            app.kubernetes.io/part-of: qe-platform
+        type: Opaque
+        data:
+          access-key: ${access_key}
+          secret-key: ${secret_key}
+          region: ${region}
+      default: aws-crcqe-bot
+    - name: pvc
+      default: pipelines-data
+    - name: ws-output-path
+      description: the path inside the pvc that to be uploaded to s3
+    - name: qe-workspace-subpath
+    - name: s3-bucket
+    - name: s3-path
+      description: Path inside the bucket to upload the assets i.e folder...nightly/crc/$date/linux-arm64
+
+  results:
+    - name: e2e-junit-url
+    - name: integration-junit-url
+    
+  steps:
+    - name: uploader
+      image: quay.io/crc-org/s3-uploader:v1.0.0
+      imagePullPolicy: Always
+      volumeMounts:
+        - name: aws-credentials
+          mountPath: /opt/aws-credentials
+        - name: storage
+          mountPath: /opt/storage
+      script: |
+        #!/bin/sh
+        mkdir -p /home/1001/.aws
+        cat <<EOF > /home/1001/.aws/credentials
+        [default]
+        aws_access_key_id     = $(cat /opt/aws-credentials/access-key)
+        aws_secret_access_key = $(cat /opt/aws-credentials/secret-key)
+        EOF
+        cat <<EOF > /home/1001/.aws/config
+        [default]
+        region = $(cat /opt/aws-credentials/region)
+        EOF
+
+        aws s3 cp --recursive /opt/storage/$(params.ws-output-path)/$(params.qe-workspace-subpath)/ s3://$(params.s3-bucket)/$(params.s3-path)
+
+        echo -n "https://$(params.s3-bucket).s3.amazonaws.com/$(params.s3-path)/e2e-junit.xml" | tee $(results.e2e-junit-url.path)
+        echo -n "https://$(params.s3-bucket).s3.amazonaws.com/$(params.s3-path)/integration-junit.xml" | tee $(results.integration-junit-url.path)        
