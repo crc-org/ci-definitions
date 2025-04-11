@@ -1,0 +1,89 @@
+name: s3-uploader-builder
+
+on:
+  push:
+    tags: [ 's3-uploader-v*' ]       
+  pull_request:
+    branches: [ main ]
+    paths: ['Makefile', 's3-uploader/**', '.github\/workflows\/s3-uploader*' ]
+      
+jobs:
+  build:
+    name: build
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build image for PR
+        if: ${{ github.event_name == 'pull_request' }}
+        env:
+          S3_IMAGE: ghcr.io/crc-org/ci-s3-uploader
+          S3_VERSION: pr-${{ github.event.number }}
+        run: |
+          make s3-uploader-oci-build
+          make s3-uploader-oci-save
+          echo "image=${S3_IMAGE}:${S3_VERSION}" >> "$GITHUB_ENV"
+  
+      - name: Build image for Release
+        if: ${{ github.event_name == 'push' }}
+        run: |
+          make s3-uploader-oci-build
+          make s3-uploader-oci-save
+          echo "image=$(sed -n 1p s3-uploader/release-info):v$(sed -n 2p s3-uploader/release-info)" >> "$GITHUB_ENV"
+
+      - name: Create image metadata
+        run: |
+          echo ${{ env.image }} > s3-uploader-image
+          echo ${{ github.event_name }} > s3-uploader-build-event
+  
+      - name: Upload s3-uploader
+        uses: actions/upload-artifact@v4
+        with:
+          name: s3-uploader
+          path: s3-uploader*
+
+  tkn-check:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Template tkn for PR
+        if: ${{ github.event_name == 'pull_request' }}
+        env:
+          S3_IMAGE: ghcr.io/crc-org/ci-s3-uploader
+          S3_VERSION: pr-${{ github.event.number }}
+        run: |
+          make s3-uploader-tkn-create
+
+      - name: Check tkn specs
+        run: |
+          if [[ ! -f s3-uploader/tkn/task.yaml ]]; then 
+            exit 1
+          fi
+          # Check if version is in sync
+
+      - name: Create k8s Kind Cluster
+        uses: helm/kind-action@v1
+    
+        # https://docs.openshift.com/pipelines/1.15/about/op-release-notes.html
+      - name: Deploy min supported tekton version
+        run: kubectl apply -f https://storage.googleapis.com/tekton-releases/pipeline/previous/v0.44.5/release.yaml
+    
+      - name: Deploy tasks
+        run: |
+          kubectl apply -f s3-uploader/tkn/task.yaml
+
+      - name: Upload s3-uploader-tkn
+        uses: actions/upload-artifact@v4
+        with:
+          name: s3-uploader-tkn
+          path: s3-uploader/tkn/task.yaml
+
+
+
+
+
+
+     
