@@ -150,3 +150,32 @@ ifndef IMAGE
 endif
 	$(TOOLS_BINDIR)/tkn bundle push $(IMAGE)-tkn \
 		-f crc-support/tkn/task.yaml
+
+
+#### reportportal ####
+
+.PHONY: reportportal-oci-build reportportal-oci-save reportportal-oci-load reportportal-oci-push reportportal-tkn-create reportportal-tkn-push
+
+REPORTPORTAL_SUPPORT ?= $(shell sed -n 1p reportportal/release-info)
+REPORTPORTAL_SUPPORT_V ?= v$(shell sed -n 2p reportportal/release-info)
+REPORTPORTAL_SAVE ?= reportportal-support
+
+reportportal-oci-build:CONTEXT=reportportal/oci
+reportportal-oci-build: MANIFEST=$(REPORTPORTAL_SUPPORT):$(REPORTPORTAL_SUPPORT_V)
+reportportal-oci-build:
+	${CONTAINER_MANAGER} build -t $(MANIFEST) -f $(CONTEXT)/Containerfile $(CONTEXT)
+
+
+reportportal-oci-save: MANIFEST=$(REPORTPORTAL_SUPPORT):$(REPORTPORTAL_SUPPORT_V)
+reportportal-oci-save:
+	${CONTAINER_MANAGER} save -o $(REPORTPORTAL_SAVE).tar $(MANIFEST)
+
+reportportal-oci-load:
+	${CONTAINER_MANAGER} load -i $(REPORTPORTAL_SAVE).tar 
+
+reportportal-oci-push: MANIFEST=$(REPORTPORTAL_SUPPORT):$(REPORTPORTAL_SUPPORT_V)
+reportportal-oci-push:
+	${CONTAINER_MANAGER} push $(MANIFEST)
+
+reportportal-tkn-create:
+	$(call tkn_template,$(REPORTPORTAL_SUPPORT),$(REPORTPORTAL_SUPPORT_V),reportportal,import)
