@@ -1,0 +1,69 @@
+name: reportportal-pusher
+
+on:
+  workflow_run:
+    workflows: [ 'reportportal-builder' ]
+    types:
+      - completed
+  
+jobs:
+  push:
+    name: push
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Download reportportal assets
+        uses: actions/download-artifact@v4
+        with:
+          name: reportportal
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      - name: Get reportportal build informaiton
+        run: |
+          echo "source_event=$(cat reportportal-build-event)" >> "$GITHUB_ENV"
+          echo "image=$(cat reportportal-image)" >> "$GITHUB_ENV"
+
+      - name: Log in to ghcr.io
+        if: ${{ env.source_event == 'pull_request' }}
+        uses: redhat-actions/podman-login@v1
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Log in quay.io
+        if: ${{ env.source_event == 'push' }}
+        uses: redhat-actions/podman-login@v1
+        with:
+          registry: quay.io
+          username: ${{ secrets.QUAY_IO_USERNAME }}
+          password: ${{ secrets.QUAY_IO_PASSWORD }}
+
+      - name: Push reportportal
+        run: |
+          # Load 
+          podman load -i reportportal.tar 
+          # Push
+          podman push ${{ env.image }}
+
+      - name: Download reportportal-tkn assets
+        uses: actions/download-artifact@v4
+        with:
+          name: reportportal-tkn
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      - name: Push reportportal-tkn
+        env:
+          TKN_VERSION: '0.37.0'
+        run: |
+          curl -LO "https://github.com/tektoncd/cli/releases/download/v${TKN_VERSION}/tkn_${TKN_VERSION}_Linux_x86_64.tar.gz"
+          tar xvzf "tkn_${TKN_VERSION}_Linux_x86_64.tar.gz" tkn
+          ./tkn bundle push ${{ env.image }}-tkn \
+            -f import.yaml
+
+      

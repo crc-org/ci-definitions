@@ -1,0 +1,168 @@
+---
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: reportportal-import
+  labels:
+    app.kubernetes.io/version: "v1.0.0"
+  annotations:
+    tekton.dev/pipelines.minVersion: "0.24.x"
+    tekton.dev/categories: data
+    tekton.dev/tags: "data, results"
+    tekton.dev/displayName: "report portal import"
+    tekton.dev/platforms: "linux/amd64"
+spec:
+  description: |
+    Task to import junit results into report portal
+  
+  params:
+  - name: secret-reportportal
+    description: |
+      ocp secret holding the report portal credentials. Secret should be accessible to this task.
+
+      ---
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: XXX
+      type: Opaque
+      data:
+        token: XXXX
+        url: XXXX
+        project: XXXX
+    default: reportportal-crc
+  - name: pvc
+    description: The persistentVolumeClaim name that contains the xml file to be imported to reportportal
+    default: pipelines-data
+  - name: results-id
+    description: Identifier for the results. Typically will include metadata about the environment or the product
+  - name: results-wsstorage-path
+    description: path within the storage workspace for the results file to be uploaded
+  - name: launch-attributes
+    description: |
+      The attributes for the launch, will show as tag in reportportal. 
+      The value format is 
+      {"attributes": [{"key":"crc-version","value":"20240926"}, {"key":"bundle-version","value":"4.17.0-rc.5"}]}
+  - name: launch-description
+    description: The description for the launch.
+    default: nightly-run
+  # Control
+  - name: debug
+    description: debug the task cmds
+    default: 'false' 
+  - name: upload-log
+    default: 'false'
+    description: |
+      whether upload the current pipelinerun logs. 
+      If true, the task will gather current pipeline-run logs to xml, then upload to reportportal.
+      So recommend put this task in Final block of pipeline. 
+  - name: pipelinerunName
+    default: $(context.pipelineRun.name)
+    description: the pipelinerun name which log be uploaded to reportportal 
+
+  steps:
+  - name: import
+    image: quay.io/crc-org/reportportal:v1.0.0 #v0.0.5
+    imagePullPolicy: Always
+    volumeMounts:
+      - name: reportportal-credentials
+        mountPath: /opt/reportportal-credentials
+      - name: storage
+        mountPath: /opt/storage
+    script: |
+      #!/bin/sh
+      set -e
+      set -x
+
+      # If debug add verbosity
+      if [[ $(params.debug) == "true" ]]; then
+        set -exuo pipefail
+      fi
+
+      if [[ $(params.upload-log) == 'true' ]]; then
+        echo $(params.pipelinerunName)
+        tkn pipelinerun list | grep $(params.pipelinerunName)
+        if [[ $? == 0 ]]; then
+          tkn pipelinerun logs $(params.pipelinerunName) > pipelinerun.log
+          logPath=pipelinerun.log
+          xmlPath=pipelineLog.xml
+          python3 /opt/trans-log-xml.py $logPath $xmlPath
+          ls -lh
+        else 
+          echo "no pipelinerun $(params.pipelinerunName) found"
+        fi
+      fi
+
+      failFlag='false'
+      # Prepare results
+      if find "/opt/storage/$(params.results-wsstorage-path)" -maxdepth 1 -name "*.xml" -print -quit | grep -q .; then
+        cp /opt/storage/$(params.results-wsstorage-path)/*.xml .
+      else
+        failFlag='true'
+      fi
+      # remove the xml file if its size is 0 byte
+      # find "/opt/storage/$(params.results-wsstorage-path)" -type f -name "*.xml" -size 0 -exec rm {} \;
+
+
+      # Compress
+      if [[ $failFlag == 'true' ]]; then
+        fileName="fail-pipelinerun"
+      else
+        fileName=$(params.results-id)
+      fi
+
+      zip "$fileName.zip" *.xml
+      # Import
+      url=$(cat /opt/reportportal-credentials/url)
+      token=$(cat /opt/reportportal-credentials/token)
+      project=$(cat /opt/reportportal-credentials/project)
+      upload=`curl -k -X POST "${url}/api/v1/${project}/launch/import" \
+          -H "accept: */*" -H "Content-Type: multipart/form-data" \
+          -H "Authorization: bearer ${token}" \
+          -F "file=@$fileName.zip"`
+      uuid=`echo ${upload#*= } | cut -d " " -f1`
+      getid=`curl -k -X GET "${url}/api/v1/${project}/launch/uuid/${uuid}" \
+          -H "accept: */*" -H  "Authorization: bearer ${token}"`
+      launchId=`echo $getid | jq .id`
+      if [[ $failFlag != 'true' ]]; then
+        curl -k -X PUT "${url}/api/v1/${project}/launch/${launchId}/update" \
+            -H "accept: */*" -H "Content-Type: application/json" \
+            -H "Authorization: bearer ${token}" \
+            -d '{"description": "$(params.launch-description)"}'
+        curl -k -X PUT "${url}/api/v1/${project}/launch/${launchId}/update" \
+            -H "accept: */*" -H "Content-Type: application/json" \
+            -H "Authorization: bearer ${token}" \
+            -d '$(params.launch-attributes)'
+      else
+        curl -k -X PUT "${url}/api/v1/${project}/launch/${launchId}/update" \
+            -H "accept: */*" -H "Content-Type: application/json" \
+            -H "Authorization: bearer ${token}" \
+            -d '{"description": "$(params.results-id)"}'
+      fi
+
+      # delete the folder in pvc
+      path=$(params.results-wsstorage-path)
+      IFS='/' read -ra folder <<< "$path"
+      if [ -d "/opt/storage/$folder" ]; then
+        ls /opt/storage/$folder
+        rm -r /opt/storage/$folder
+      fi
+
+    resources:      
+      requests:
+        memory: "100Mi"
+        cpu: "50m"
+      limits:
+        memory: "200Mi"
+        cpu: "100m"
+
+  volumes:
+    - name: storage
+      description: storage volume where to find the results to be imported
+      persistentVolumeClaim:
+        claimName: $(params.pvc)
+    - name: reportportal-credentials
+      secret:
+        secretName: $(params.secret-reportportal)
+    
+    

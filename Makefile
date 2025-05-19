@@ -151,7 +151,6 @@ endif
 	$(TOOLS_BINDIR)/tkn bundle push $(IMAGE)-tkn \
 		-f crc-support/tkn/task.yaml
 
-
 #### s3-uploader ####
 
 .PHONY: s3-uploader-oci-build s3-uploader-tkn-create
@@ -175,3 +174,33 @@ s3-uploader-oci-push:
 
 s3-uploader-tkn-create:
 	$(call tkn_template,$(S3_IMAGE),$(S3_VERSION),s3-uploader,task)
+
+
+#### reportportal ####
+
+.PHONY: reportportal-oci-build reportportal-oci-save reportportal-oci-load reportportal-oci-push reportportal-tkn-create reportportal-tkn-push
+
+REPORTPORTAL ?= $(shell sed -n 1p reportportal/release-info)
+REPORTPORTAL_V ?= v$(shell sed -n 2p reportportal/release-info)
+REPORTPORTAL_SAVE ?= reportportal
+
+reportportal-oci-build:CONTEXT=reportportal/oci
+reportportal-oci-build: MANIFEST=$(REPORTPORTAL):$(REPORTPORTAL_V)
+reportportal-oci-build:
+	${CONTAINER_MANAGER} build -t $(MANIFEST) -f $(CONTEXT)/Containerfile $(CONTEXT)
+
+
+reportportal-oci-save: MANIFEST=$(REPORTPORTAL):$(REPORTPORTAL_V)
+reportportal-oci-save:
+	${CONTAINER_MANAGER} save -o $(REPORTPORTAL_SAVE).tar $(MANIFEST)
+
+reportportal-oci-load:
+	${CONTAINER_MANAGER} load -i $(REPORTPORTAL_SAVE).tar 
+
+reportportal-oci-push: MANIFEST=$(REPORTPORTAL):$(REPORTPORTAL_V)
+reportportal-oci-push:
+	${CONTAINER_MANAGER} push $(MANIFEST)
+
+reportportal-tkn-create:
+	$(call tkn_template,$(REPORTPORTAL),$(REPORTPORTAL_V),reportportal,import)
+

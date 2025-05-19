@@ -1,0 +1,82 @@
+name: reportportal-builder
+
+on:
+  push:
+    tags: [ 'reportportal-v*' ]       
+  pull_request:
+    branches: [ main ]
+    paths: ['Makefile', 'reportportal/**', '.github\/workflows\/reportportal*' ]
+      
+jobs:
+  build:
+    name: build
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build image for PR
+        if: ${{ github.event_name == 'pull_request' }}
+        env:
+          REPORTPORTAL: ghcr.io/crc-org/ci-reportportal
+          REPORTPORTAL_V: pr-${{ github.event.number }}
+        run: |
+          make reportportal-oci-build
+          make reportportal-oci-save
+          echo "image=${REPORTPORTAL}:${REPORTPORTAL_V}" >> "$GITHUB_ENV"
+  
+      - name: Build image for Release
+        if: ${{ github.event_name == 'push' }}
+        run: |
+          make reportportal-oci-build
+          make reportportal-oci-save
+          echo "image=$(sed -n 1p reportportal/release-info):v$(sed -n 2p reportportal/release-info)" >> "$GITHUB_ENV"
+
+      - name: Create image metadata
+        run: |
+          echo ${{ env.image }} > reportportal-image
+          echo ${{ github.event_name }} > reportportal-build-event
+  
+      - name: Upload reportportal
+        uses: actions/upload-artifact@v4
+        with:
+          name: reportportal
+          path: reportportal*
+
+  tkn-check:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Template tkn for PR
+        if: ${{ github.event_name == 'pull_request' }}
+        env:
+          REPORTPORTAL: ghcr.io/crc-org/ci-reportportal
+          REPORTPORTAL_V: pr-${{ github.event.number }}
+        run: |
+          make reportportal-tkn-create
+
+      - name: Check tkn specs
+        run: |
+          if [[ ! -f reportportal/tkn/import.yaml ]]; then 
+            exit 1
+          fi
+          # Check if version is in sync
+
+      - name: Create k8s Kind Cluster
+        uses: helm/kind-action@v1
+    
+        # https://docs.openshift.com/pipelines/1.15/about/op-release-notes.html
+      - name: Deploy min supported tekton version
+        run: kubectl apply -f https://storage.googleapis.com/tekton-releases/pipeline/previous/v0.44.5/release.yaml
+    
+      - name: Deploy tasks
+        run: |
+          kubectl apply -f reportportal/tkn/import.yaml
+
+      - name: Upload reportportal-tkn
+        uses: actions/upload-artifact@v4
+        with:
+          name: reportportal-tkn
+          path: reportportal/tkn/import.yaml

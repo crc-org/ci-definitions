@@ -1,0 +1,11 @@
+FROM registry.access.redhat.com/ubi9/ubi-minimal
+
+LABEL org.opencontainers.image.authors="CodeReady Containers <devtools-cdk@redhat.com>"
+
+ENV TKN_CLI https://github.com/tektoncd/cli/releases/download/v0.38.1/tkn_0.38.1_Linux_x86_64.tar.gz
+
+RUN microdnf install -y openssh-clients sshpass zip bash jq findutils python3 tar\
+    && curl -LO "${TKN_CLI}" \
+    && tar -xzvf tkn_0.38.1_Linux_x86_64.tar.gz -C /usr/local/bin/
+
+COPY trans-log-xml.py /opt/
