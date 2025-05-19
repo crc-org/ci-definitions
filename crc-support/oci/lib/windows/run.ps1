@@ -81,6 +81,7 @@ $latestPath="$HOME\OpenshiftLocal\crc\latest"
 $install = If ($install -eq 'true') {$true} Else {$false}
 $download = If ($download -eq 'true') {$true} Else {$false}
 $freshEnv = If ($freshEnv -eq 'true') {$true} Else {$false}
+$delete = If ($delete -eq 'true') {$true} Else {$false}
 
 # FORCE FRESH
 if ($freshEnv) {
