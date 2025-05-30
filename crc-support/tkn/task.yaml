@@ -21,6 +21,7 @@ spec:
     - name: host-secret
       secret:
         secretName: $(params.secret-host)
+    - name: orsa-asset      
   
   params:
     # OS parameter
@@ -50,6 +51,10 @@ spec:
     # Assets parameter
     - name: asset-base-url
       description: base url for the asset to be downloaded
+      default: ""
+    - name: asset-oras-address
+      description: the oras address of the asset
+      default: ""
     - name: asset-name
       description: name for the asset to be downloaded
     - name: asset-shasum-name
@@ -81,14 +86,29 @@ spec:
       description: Path on target host where the item has been dowloaded
     
   steps:
+  - name: oras-pull
+    image: ghcr.io/oras-project/oras:v1.2.3
+    when:
+      - input: "$(params.asset-oras-address)"
+        operator: notin
+        values: [""]
+    volumeMounts:
+      - name: orsa-asset
+        mountPath: /workspace
+    args: 
+      - pull
+      - $(params.asset-oras-address) 
   - name: preparer
     image: quay.io/crc-org/ci-crc-support:v2.0.0-dev-$(params.os) 
     imagePullPolicy: Always
     volumeMounts:
       - name: host-secret
         mountPath: /opt/host
+      - name: orsa-asset
+        mountPath: /opt/asset
     script: |
       #!/bin/bash
+      set -x
 
       if [ "$(params.debug)" = "true" ]; then
         set -xuo 
@@ -130,6 +150,22 @@ spec:
         tPath+="/crc/$(params.crc-version)"
       fi
 
+      download=$(params.download)
+      
+      if [[ -f /opt/asset/$(params.asset-name) ]]; then
+        echo "copy $(params.asset-name) to /opt/crc-support" 
+        cp /opt/asset/$(params.asset-name) /opt/crc-support
+        ls /opt/crc-support
+        download="false"
+        
+        tPath="/Users/${TARGET_HOST_USERNAME}/${TARGET_FOLDER}"
+        if [[ $(params.os) == 'linux' ]]; then
+          tPath="/home/${TARGET_HOST_USERNAME}/${TARGET_FOLDER}"
+        fi
+
+      else
+        echo "$(params.asset-name) not found"
+      fi
 
 
       cmd="${TARGET_FOLDER}/${runner} -targetPath $tPath "
@@ -137,7 +173,7 @@ spec:
       cmd+="-aName $(params.asset-name) "
       cmd+="-aSHAName $(params.asset-shasum-name) "
       cmd+="-freshEnv $(params.force-fresh) "
-      cmd+="-download $(params.download) "
+      cmd+="-download $download "
       cmd+="-install $(params.install) "
       cmd+="-delete $(params.delete) "
       
@@ -154,4 +190,5 @@ spec:
       limits:
         memory: "140Mi"
         cpu: "100m"
+    timeout: 60m
   
