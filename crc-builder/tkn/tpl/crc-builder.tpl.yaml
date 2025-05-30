@@ -18,8 +18,14 @@ spec:
   description: >-
     This task will build openshift local binary for linux distributions 
 
-  workspaces:
+  volumes:
     - name: s3-credentials
+      secret:
+        secretName: $(params.s3-credentials)      
+
+  params:
+    - name: s3-credentials
+      default: s3-aws-crcqe-asia
       description: |
         ocp secret holding the s3 credentials. Secret should be accessible to this task.
         ---
@@ -36,9 +42,6 @@ spec:
           bucket: ${bucket_value}  
           access-key: ${access_key}
           secret-key: ${secret_key}
-      mountPath: /opt/s3-credentials
-
-  params:
     # SCM params
     - name: crc-scm
       default: https://github.com/code-ready/crc.git
@@ -64,6 +67,9 @@ spec:
       # cimage and cversion values should be passed to the template
       image: cimage:cversion-linux
       imagePullPolicy: Always
+      volumeMounts:
+        - name: s3-credentials
+          mountPath: /opt/s3-credentials
       script: |
           #!/bin/sh
 

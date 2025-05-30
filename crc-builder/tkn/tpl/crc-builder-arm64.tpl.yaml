@@ -20,10 +20,21 @@ spec:
 
     As part of the steps included on the task an arm64 machine is provisioned to run the builder on it.
 
-  workspaces:
+  volumes:
     - name: pipelines-data
-      description: workspace to store outputs to connect within the target machine + state file for the infrastructure 
+      emptyDir: {}
     - name: s3-credentials
+      secret:
+        secretName: $(params.s3-credentials)      
+    - name: az-credentials
+      secret:
+        secretName: $(params.az-credentials)
+      
+
+  params:
+    # credentials
+    - name: s3-credentials
+      default: s3-aws-crcqe-asia
       description: |
         ocp secret holding the s3 credentials. Secret should be accessible to this task.
         ---
@@ -40,8 +51,8 @@ spec:
           bucket: ${bucket_value}  
           access-key: ${access_key}
           secret-key: ${secret_key}
-      mountPath: /opt/s3-credentials
     - name: az-credentials
+      default: aws-crcqe-bot
       description: |
         ocp secret holding the azure credentials. Secret should be accessible to this task.
 
@@ -52,9 +63,7 @@ spec:
         * client_secret
         * storage_account (optional if we use remote az storage)
         * storage_key (optional if we use remote az storage)
-      mountPath: /opt/credentials
-
-  params:
+    
     # SCM params
     - name: crc-scm
       default: https://github.com/code-ready/crc.git
@@ -87,6 +96,11 @@ spec:
   steps:
     - name: provisioner
       image: quay.io/redhat-developer/mapt:v0.7.4
+      volumeMounts:
+        - name: az-credentials
+          mountPath: /opt/credentials
+        - name: pipelines-data
+          mountPath: /opt/pipelines-data
       script: |
         #!/bin/sh
         set -x
@@ -104,7 +118,7 @@ spec:
         fi
         
         # Output folder
-        workspace_path=$(workspaces.pipelines-data.path)/fedora
+        workspace_path=/opt/pipelines-data/fedora
         mkdir -p ${workspace_path}
 
         # Run mapt
@@ -127,6 +141,11 @@ spec:
     - name: build
       # cimage and cversion values should be passed to the template
       image: quay.io/rhqp/support-tools:v0.0.4
+      volumeMounts:
+        - name: s3-credentials
+          mountPath: /opt/s3-credentials
+        - name: pipelines-data
+          mountPath: /opt/pipelines-data
       script: |
           #!/bin/sh
           set -x
@@ -157,9 +176,9 @@ spec:
           cmd+="-e DEBUG=true "
           cmd+="cimage:cversion-linux-arm64"
 
-          key=$(workspaces.pipelines-data.path)/fedora/id_rsa
-          username=$(cat $(workspaces.pipelines-data.path)/fedora/username)
-          host=$(cat $(workspaces.pipelines-data.path)/fedora/host)
+          key=/opt/pipelines-data/fedora/id_rsa
+          username=$(cat /opt/pipelines-data/fedora/username)
+          host=$(cat /opt/pipelines-data/fedora/host)
 
           # Exec
           # We need podman on the machine
@@ -189,6 +208,11 @@ spec:
       timeout: 900m
     - name: decommission
       image: quay.io/redhat-developer/mapt:v0.7.4
+      volumeMounts:
+        - name: az-credentials
+          mountPath: /opt/credentials
+        - name: pipelines-data
+          mountPath: /opt/pipelines-data
       onError: continue
       script: |
         #!/bin/sh
@@ -207,7 +231,7 @@ spec:
         fi
         
         # Output folder
-        workspace_path=$(workspaces.pipelines-data.path)/fedora
+        workspace_path=/opt/pipelines-data/fedora
         mkdir -p ${workspace_path}
 
         # Run mapt

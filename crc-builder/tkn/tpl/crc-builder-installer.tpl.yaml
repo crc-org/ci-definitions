@@ -18,8 +18,17 @@ spec:
   description: >-
     This task will build openshift local installers 
 
-  workspaces:
+  volumes:
     - name: s3-credentials
+      secret:
+        secretName: $(params.s3-credentials)  
+    - name: host-info
+      secret:
+        secretName: $(params.host-info)
+
+  params:
+    - name: s3-credentials
+      default: s3-aws-crcqe-asia
       description: |
         ocp secret holding the s3 credentials. Secret should be accessible to this task.
         ---
@@ -36,7 +45,6 @@ spec:
           bucket: ${bucket_value}  
           access-key: ${access_key}
           secret-key: ${secret_key}
-      mountPath: /opt/s3-credentials
     - name: host-info
       description: |
         ocp secret holding the hsot info credentials. Secret should be accessible to this task.
@@ -50,16 +58,13 @@ spec:
         type: Opaque
         data:
           host: XXXX
-          user: XXXX
+          username: XXXX
           password: XXXX
-          key: XXXX
+          id_rsa: XXXX
           platform: XXXX
           os-version: XXXX
           arch: XXXX
           os: XXXX
-      mountPath: /opt/host/
-
-  params:
     # Manage task params
     - name: os
       description: valid values are macos and windows
@@ -91,7 +96,12 @@ spec:
   steps:
     - name: crc-executable-builder
       # cimage and cversion values should be passed to the template
-      image: cimage:cversion-$(params.os) 
+      image: cimage:cversion-$(params.os)
+      volumeMounts:
+        - name: s3-credentials
+          mountPath: /opt/s3-credentials
+        - name: host-info
+          mountPath: /opt/host/
       imagePullPolicy: Always
       script: |
           #!/bin/sh
@@ -100,8 +110,8 @@ spec:
           SECONDS=0
           DEBUG=$(params.debug)
           TARGET_HOST=$(cat /opt/host/host)
-          TARGET_HOST_USERNAME=$(cat /opt/host/user)
-          cp /opt/host/key id_rsa
+          TARGET_HOST_USERNAME=$(cat /opt/host/username)
+          cp /opt/host/id_rsa id_rsa
           chmod 600 id_rsa
           TARGET_HOST_KEY_PATH=id_rsa
           TARGET_FOLDER=crc-builder
