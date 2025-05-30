@@ -1,0 +1,572 @@
+---
+apiVersion: tekton.dev/v1beta1
+kind: Pipeline
+metadata:
+  name: crc-qe-latest
+  labels:
+    app.kubernetes.io/version: "1.3"
+    redhat.com/product: openshift-local
+    dev.lifecycle.io/phase: qe
+    openshift-local.redhat.com/component: crc
+  annotations:
+    tekton.dev/pipelines.minVersion: "0.44.x"
+    tekton.dev/categories: build
+    tekton.dev/tags: openshift-local, crc, baremetal
+    tekton.dev/platforms: "linux/amd64"
+spec:
+  description: >-
+    This pipeline will build a distributable installer (binary + installer) or binary. The pipeline also will test the distributable with a specific bundle
+
+    * testing part relies on download and use custom bundle will using crc (-b option) this is why it requires the download bundle parameters
+    * then for testing will be used fixed machines (information for machines are coming from secrets)
+    * assets and test results will be stored on S3
+
+  workspaces:
+    - name: storage
+    - name: builder-host-info
+      description: |
+        ocp secret holding the hsot info credentials. Secret should be accessible to this task.
+        ---
+        apiVersion: v1
+        kind: Secret
+        metadata:
+          name: XXXX
+          labels:
+            app.kubernetes.io/component: XXXX
+        type: Opaque
+        data:
+          host: XXXX
+          user: XXXX
+          password: XXXX
+          key: XXXX
+          platform: XXXX
+          os-version: XXXX
+          arch: XXXX
+          os: XXXX
+    - name: ocp-pullsecret
+      description: |
+        crc secret name holding the pullsecret. This is only required if backed tested is crc preset
+
+        secret should match following format:
+        ---
+        apiVersion: v1
+        kind: Secret
+        metadata:
+          name: ${secret-name}
+        type: Opaque
+        data:
+          pullsecret: ${pullsecret-value}
+    - name: s3-credentials
+      description: |
+        ocp secret holding the s3 credentials. Secret should be accessible to this task.
+        ---
+        apiVersion: v1
+        kind: Secret
+        metadata:
+          name: XXXX
+          labels:
+            app.kubernetes.io/component: XXXX
+        type: Opaque
+        data:
+          download-url: ${download_url}
+          upload-url: ${upload_url}
+          bucket: ${bucket_value}
+          access-key: ${access_key}
+          secret-key: ${secret_key}
+
+  params:
+    - name: secret-tester
+      description: |
+        ocp secret holding the hsot info credentials. Secret should be accessible to this task.
+        ---
+        apiVersion: v1
+        kind: Secret
+        metadata:
+          name: XXXX
+          labels:
+            app.kubernetes.io/component: XXXX
+        type: Opaque
+        data:
+          host: XXXX
+          username: XXXX
+          password: XXXX
+          id_rsa: XXXX
+          platform: XXXX
+          os-version: XXXX
+          arch: XXXX
+          os: XXXX
+    # Existing components
+    - name: bundle-base-url
+      description: base url to download bundle and shasumsfile
+    - name: bundle-name
+      description: bundle name
+    - name: bundle-shasumfile
+      description: shasumfile downloadble from bundle-url to check the bundle
+      default: sha256sum.txt
+    - name: crc-version
+      description: tag prefix for crc-e2e image
+      default: next
+
+    # CRC build param
+    - name: crc-scm-pr
+      default: "''"
+    - name: vfkit-scm-ref
+      default: main
+
+    # QE run params
+    - name: qe-worspace-subpath
+      description: subpath on workspace where storing ephemeral qe results
+      default: qe-results
+    - name: run-e2e
+      description: Control if e2e tests are executed. (true or false)
+      default: 'true'
+    - name: e2e-tag
+      description: tags to select e2e scnearios. Default empty values which means all scnearios
+      default: "''"
+    - name: run-integration
+      description: Control if integration tests are executed. (true or false)
+      default: 'true'
+    - name: integration-tag
+      description: tags to select integration scnearios. Default empty values which means all scnearios
+      default: "''"
+    - name: integration-timeout
+      description: total timeout for run integration suite
+      default: "120m"
+
+    # Control
+    - name: debug
+      description: debug the task cmds
+      default: 'false'
+    - name: target-cleanup
+      description: cleanup target ephemeral target folders on each step which requires them
+      default: 'true'
+    - name: test-catalog
+      default: nightly-run
+      description: used for catelog in reportportal launch, nightly-run, bundle-test, crc-release-test
+
+    # S3 target
+    - name: s3-bucket
+      description: bucket to upload builds assets and test results
+      default: crcqe-asia
+    - name: s3-path
+      description: folder path inside the bucket to upload builds assets and test results
+
+  results:
+    - name: e2e-results-url
+      description: url with e2e junit results file
+      value: $(tasks.s3-upload-results.results.e2e-junit-url)
+    - name: integration-results-url
+      description: url with integration junit results file
+      value: $(tasks.s3-upload-results.results.integration-junit-url)
+
+  tasks:
+    - name: init
+      taskSpec:
+        description: This task will prepare the environment and data for being used within the pipeline
+        volumes:
+          - name: host-secret
+            secret:
+              secretName: $(params.secret-runner)
+        params:
+          - name: bundle-name
+          - name: secret-runner
+        results:
+          - name: correlation
+          - name: date
+          - name: bundle-version
+          - name: bundle-preset
+          - name: os
+          - name: arch
+        steps:
+          - name: init
+            image: registry.access.redhat.com/ubi9/ubi-minimal
+            volumeMounts:
+              - name: host-secret
+                mountPath: /opt/tester-host
+            script: |
+              #!/bin/sh
+              correlation=$RANDOM$RANDOM
+              echo -n $correlation | tee $(results.correlation.path)
+              echo -n $(date +'%Y%m%d') | tee $(results.date.path)
+              name=$(params.bundle-name)
+              nameArr=(${name//_/ })
+              preset=${nameArr[1]}
+              if [[ $preset == 'microshift' ]]; then
+                version=${nameArr[3]}
+              else
+                version=${nameArr[2]}
+                preset='openshift'
+              fi
+              echo -n $version | tee $(results.bundle-version.path)
+              echo -n $preset | tee $(results.bundle-preset.path)
+              os=$(cat /opt/tester-host/os)
+              arch=$(cat /opt/tester-host/arch)
+              echo -n $os | tee $(results.os.path)
+              echo -n $arch | tee $(results.arch.path)
+      params:
+        - name: bundle-name
+          value: $(params.bundle-name)
+        - name: secret-runner
+          value: $(params.secret-tester)
+    - name: download-bundle
+      runAfter:
+        - init
+      taskRef:
+        resolver: git
+        params:
+          - name: url
+            value: https://github.com/crc-org/ci-definitions
+          - name: revision
+            value: crc-support-v1.1.1
+          - name: pathInRepo
+            value: crc-support/tkn/task.yaml
+      params:
+        - name: secret-host
+          value: $(params.secret-tester)
+        - name: os
+          value: $(tasks.init.results.os)
+        - name: asset-base-url
+          value: $(params.bundle-base-url)
+        - name: asset-name
+          value: $(params.bundle-name)
+        - name: asset-shasum-name
+          value: $(params.bundle-shasumfile)
+        - name: force-fresh
+          value: 'false'
+        - name: install
+          value: 'false'
+        - name: debug
+          value: $(params.debug)
+        - name: delete
+          value: 'true'
+    - name: build-installer
+      when:
+        - input: $(tasks.init.results.os)
+          operator: notin
+          values: ["linux"]
+      runAfter:
+        - init
+      taskRef:
+        resolver: git
+        params:
+          - name: url
+            value: https://github.com/crc-org/ci-definitions
+          - name: revision
+            value: crc-builder-v1.0.4
+          - name: pathInRepo
+            value: crc-builder/tkn/crc-builder-installer.yaml
+      params:
+        - name: os
+          value: $(tasks.init.results.os)
+        - name: crc-scm-pr
+          value: $(params.crc-scm-pr)
+        - name: s3-folder-path
+          value: $(params.s3-path)
+        - name: vfkit-scm-ref
+          value: $(params.vfkit-scm-ref)
+      workspaces:
+        - name: s3-credentials
+          workspace: s3-credentials
+        - name: host-info
+          workspace: builder-host-info
+      timeout: "30m"
+    - name: build-binary
+      when:
+      - input: $(tasks.init.results.os)
+        operator: in
+        values: ["linux"]
+      runAfter:
+      - init
+      taskRef:
+        resolver: git
+        params:
+          - name: url
+            value: https://github.com/crc-org/ci-definitions
+          - name: revision
+            value: crc-builder-v1.0.4
+          - name: pathInRepo
+            value: crc-builder/tkn/crc-builder.yaml
+      params:
+        - name: crc-scm-pr
+          value: $(params.crc-scm-pr)
+        - name: s3-folder-path
+          value: $(params.s3-path)
+      workspaces:
+        - name: s3-credentials
+          workspace: s3-credentials
+      timeout: "30m"
+    - name: sync-build
+      runAfter:
+        - init
+      taskSpec:
+        description: This task will check if an assets exists through a http request
+        workspaces:
+          - name: s3-credentials
+            mountPath: /opt/s3-credentials
+        params:
+          - name: s3-path
+          - name: os
+          - name: loop
+            description: |
+              this param control how the task is executed:
+              * if wait is set to true the check keeps on a loop until assets exists
+                or the timeout for the task is reached
+              * if wait is set to false the task check the assets only once
+            default: 'false'
+        results:
+          - name: exists
+            description: return if asset exists. "True" or "False"
+          - name: asset-url
+          - name: asset-name
+          - name: asset-shasum
+        steps:
+          - name: check
+            image: registry.access.redhat.com/ubi9/ubi-minimal
+            script: |
+              #!/bin/sh
+
+              # $1 url
+              # $2 asset name
+              check_asset() {
+                url="${1}/${2}"
+                response_code=$(curl -o /dev/null --silent -Iw '%{http_code}' "${url}")
+                while [ $(params.loop) == "true" ] && [ ${response_code} -ne 200 ]
+                do
+                  response_code=$(curl -o /dev/null --silent -Iw '%{http_code}' "${url}")
+                done
+                if [ ${response_code} -ne 200 ]; then
+                  echo "False"
+                else
+                  echo "True"
+                fi
+              }
+
+              set -exuo pipefail
+
+              url="$(cat /opt/s3-credentials/download-url)/$(params.s3-path)"
+              asset=""
+              case "$(params.os)" in
+                linux)
+                  asset="crc-linux-amd64.tar.xz"
+                  ;;
+                macos|darwin)
+                  asset="crc-macos-installer.pkg"
+                  ;;
+                windows)
+                  asset="crc-windows-installer.zip"
+                  ;;
+              esac
+              shasum="${asset}.sha256sum"
+
+              asset_exists=$(check_asset ${url} ${shasum})
+
+              echo -n "${asset_exists}" | tee $(results.exists.path)
+              echo -n "${url}" | tee $(results.asset-url.path)
+              echo -n "${asset}" | tee $(results.asset-name.path)
+              echo -n "${shasum}" | tee $(results.asset-shasum.path)
+
+      workspaces:
+        - name: s3-credentials
+          workspace: s3-credentials
+      params:
+        - name: s3-path
+          value: $(params.s3-path)
+        - name: os
+          value: $(tasks.init.results.os)
+        - name: loop
+          value: 'true'
+    - name: install
+      # Install should go after download bundle as per windows installation
+      # may machine will be rebooted so download can be corrupted
+      runAfter:
+        - sync-build
+        - download-bundle
+      taskRef:
+        resolver: git
+        params:
+          - name: url
+            value: https://github.com/crc-org/ci-definitions
+          - name: revision
+            value: crc-support-v1.1.1
+          - name: pathInRepo
+            value: crc-support/tkn/task.yaml
+      params:
+        - name: secret-host
+          value: $(params.secret-tester)
+        - name: os
+          value: $(tasks.init.results.os)
+        - name: asset-base-url
+          value: $(tasks.sync-build.results.asset-url)
+        - name: asset-name
+          value: $(tasks.sync-build.results.asset-name)
+        - name: asset-shasum-name
+          value: $(tasks.sync-build.results.asset-shasum)
+        - name: force-fresh
+          value: 'true'
+        - name: install
+          value: 'true'
+        - name: debug
+          value: $(params.debug)
+      timeout: "1h"
+    # We need to adjust the target host info as we were using it previously
+    # based on storage on workspace and parameters. This should be changed on
+    # https://github.com/crc-org/ci-definitions/pull/39
+    - name: host-info
+      runAfter:
+        - sync-build
+      taskSpec:
+        description: This task will adapt tester host info to storage structure expected by qe task
+        volumes:
+          - name: host-secret
+            secret:
+              secretName: $(params.secret-host)
+          - name: storage
+            persistentVolumeClaim:
+              claimName: pipelines-data
+        params:
+          - name: ws-output-path
+          - name: secret-host
+        results:
+          - name: host
+          - name: username
+          - name: os
+          - name: arch
+        steps:
+          - name: host-info
+            image: registry.access.redhat.com/ubi9/ubi-minimal
+            volumeMounts:
+              - name: host-secret
+                mountPath: /opt/host-info
+              - name: storage
+                mountPath: /opt/storage
+
+            script: |
+              #!/bin/sh
+              set -exuo 
+
+              mkdir -p /opt/storage/$(params.ws-output-path)
+              cp /opt/host-info/id_rsa /opt/storage/$(params.ws-output-path)/id_rsa 
+              cat /opt/host-info/host | tee $(results.host.path)  
+              cat /opt/host-info/username | tee $(results.username.path)
+              cat /opt/host-info/os | tee $(results.os.path)
+              cat /opt/host-info/arch | tee $(results.arch.path)
+      params:
+        - name: ws-output-path
+          value: $(tasks.init.results.correlation)
+        - name: secret-host
+          value: $(params.secret-tester)
+    - name: qe
+      runAfter:
+        - host-info
+        - install
+      taskRef:
+        resolver: bundles
+        params:
+        - name: bundle
+          value: quay.io/rhqp/crc-e2e-tkn:v1.0.0
+        - name: name
+          value: crc-e2e
+        - name: kind
+          value: task
+      params:
+      - name: os
+        value: $(tasks.host-info.results.os)
+      - name: arch
+        value: $(tasks.host-info.results.arch)
+      - name: host
+        value: $(tasks.host-info.results.host)
+      - name: username
+        value: $(tasks.host-info.results.username)
+      - name: key
+        value: id_rsa
+      - name: workspace-resources-path
+        value: $(tasks.init.results.correlation)
+      - name: worspace-qe-subpath
+        value: $(params.qe-worspace-subpath)
+      # This is used to run e2e and integration containers
+      # Need to integrate a build from main and make it accessible
+      # For the time been we are good with latest released version
+      - name: crc-version
+        value: $(params.crc-version)
+      - name: bundle-location
+        value: $(tasks.download-bundle.results.target-path)/$(params.bundle-name)
+      - name: run-e2e
+        value: $(params.run-e2e) 
+      - name: e2e-tag
+        value: $(params.e2e-tag) 
+      - name: e2e-cleanup-target
+        value: $(params.target-cleanup) 
+      - name: run-integration
+        value: $(params.run-integration) 
+      - name: integration-tag
+        value: $(params.integration-tag) 
+      - name: integration-cleanup-target
+        value: $(params.target-cleanup) 
+      - name: integration-timeout
+        value: $(params.integration-timeout)
+      - name: debug
+        value: $(params.debug)
+      workspaces:
+      - name: pipelines-data
+        workspace: storage
+      - name: ocp-pullsecret
+        workspace: ocp-pullsecret
+      timeout: "5h" 
+    - name: s3-upload-results
+      runAfter:
+      - qe
+      taskRef:
+        resolver: git
+        params:
+          - name: url
+            value: https://github.com/crc-org/ci-definitions
+          - name: revision
+            value: main
+          - name: pathInRepo
+            value: s3-uploader/tkn/task.yaml
+      params:
+        - name: aws-credentials
+          value: aws-crcqe-bot
+        - name: pvc
+          value: pipelines-data
+        - name: ws-output-path
+          value: $(tasks.init.results.correlation)
+        - name: qe-workspace-subpath
+          value: $(params.qe-worspace-subpath)
+        - name: s3-bucket
+          value: $(params.s3-bucket)
+        - name: s3-path
+          value: $(params.s3-path)
+
+  finally:
+    - name: reportportal-import
+      taskRef:
+        resolver: git 
+        params:
+        - name: url
+          value: https://github.com/crc-org/ci-definitions
+        - name: revision
+          value: main
+        - name: pathInRepo
+          value: reportportal/tkn/import.yaml
+      params:
+        - name: secret-reportportal
+          value: reportportal-crc
+        - name: pvc
+          value: pipelines-data
+        - name: results-id
+          value: crc-$(tasks.init.results.bundle-preset)-$(tasks.init.results.os)-$(tasks.init.results.arch)  
+        - name: results-wsstorage-path
+          value: $(tasks.init.results.correlation)/$(params.qe-worspace-subpath)
+        - name: debug
+          value: $(params.debug)
+        - name: launch-attributes
+          value: |
+           {"attributes":[{"key":"crc-version","value":"$(tasks.init.results.date)"},{"key":"bundle-version","value":"$(tasks.init.results.bundle-version)"},{"key":"preset","value":"$(tasks.init.results.bundle-preset)"},{"key": "skippedIssue", "value": true}]}
+        - name: launch-description
+          value: $(params.test-catalog)
+        - name: upload-log
+          value: 'true'
+        - name: pipelinerunName
+          value: $(context.pipelineRun.name)
+      timeout: "15m"  
