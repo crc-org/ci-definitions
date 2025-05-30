@@ -4,7 +4,7 @@ kind: Task
 metadata:
   name: crc-builder-installer
   labels:
-    app.kubernetes.io/version: "cversion"
+    app.kubernetes.io/version: "v2.0.0-dev"
     redhat.com/product: openshift-local
     dev.lifecycle.io/phase: build
     openshift-local.redhat.com/component: installer
@@ -95,8 +95,8 @@ spec:
 
   steps:
     - name: crc-executable-builder
-      # cimage and cversion values should be passed to the template
-      image: cimage:cversion-$(params.os)
+      # quay.io/crc-org/ci-crc-builder and v2.0.0-dev values should be passed to the template
+      image: quay.io/crc-org/ci-crc-builder:v2.0.0-dev-$(params.os)
       volumeMounts:
         - name: s3-credentials
           mountPath: /opt/s3-credentials

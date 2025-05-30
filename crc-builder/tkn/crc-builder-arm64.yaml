@@ -4,7 +4,7 @@ kind: Task
 metadata:
   name: crc-builder-arm64
   labels:
-    app.kubernetes.io/version: "cversion"
+    app.kubernetes.io/version: "v2.0.0-dev"
     redhat.com/product: openshift-local
     dev.lifecycle.io/phase: build
     openshift-local.redhat.com/component: binary
@@ -139,7 +139,7 @@ spec:
           memory: "1000Mi"
           cpu: "400m"
     - name: build
-      # cimage and cversion values should be passed to the template
+      # quay.io/crc-org/ci-crc-builder and v2.0.0-dev values should be passed to the template
       image: quay.io/rhqp/support-tools:v0.0.4
       volumeMounts:
         - name: s3-credentials
@@ -174,7 +174,7 @@ spec:
             cmd+="-e UPLOAD_PATH=$(cat /opt/s3-credentials/bucket)/$(params.s3-folder-path) "
           fi
           cmd+="-e DEBUG=true "
-          cmd+="cimage:cversion-linux-arm64"
+          cmd+="quay.io/crc-org/ci-crc-builder:v2.0.0-dev-linux-arm64"
 
           key=/opt/pipelines-data/fedora/id_rsa
           username=$(cat /opt/pipelines-data/fedora/username)
