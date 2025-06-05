@@ -24,27 +24,6 @@ spec:
 
   workspaces:
     - name: storage
-    - name: az-credentials
-      description: |
-        This secret will hold the credentials to the target cloud provider it could match depending on the target:
-
-        ## Azure
-        ocp secret holding the azure credentials. Secret should be accessible to this task.
-
-        ---
-        apiVersion: v1
-        kind: Secret
-        metadata:
-          name: az-${name}
-          labels:
-            app.kubernetes.io/component: ${name}
-            app.kubernetes.io/part-of: qe-platform
-        type: Opaque
-        data:
-          tenant_id: ${tenant_id}
-          subscription_id: ${subscription_id}
-          client_id: ${client_id}
-          client_secret: ${client_secret}
     - name: ocp-pullsecret
       description: |
         crc secret name holding the pullsecret. This is only required if backed tested is crc preset
@@ -58,25 +37,14 @@ spec:
         type: Opaque
         data:
           pullsecret: ${pullsecret-value}
-    - name: s3-credentials
-      description: |
-        ocp secret holding the s3 credentials. Secret should be accessible to this task.
-        ---
-        apiVersion: v1
-        kind: Secret
-        metadata:
-          name: XXXX
-          labels:
-            app.kubernetes.io/component: XXXX
-        type: Opaque
-        data:
-          download-url: ${download_url}  
-          upload-url: ${upload_url}  
-          bucket: ${bucket_value}  
-          access-key: ${access_key}
-          secret-key: ${secret_key}
 
   params:
+    - name: s3-credentials
+      default: s3-aws-crcqe-asia
+    - name: aws-credentials
+      default: aws-crcqe-bot
+    - name: az-credentials
+      default: az-crcqe-bot
     # Existing components
     - name: bundle-base-url
       description: base url to download bundle and shasumsfile
@@ -178,21 +146,18 @@ spec:
           - name: url
             value: https://github.com/crc-org/ci-definitions
           - name: revision
-            value: crc-builder-v1.0.4
+            value: crc-builder-v1.1.0
           - name: pathInRepo
             value: crc-builder/tkn/crc-builder-arm64.yaml
       params:
+        - name: s3-credentials
+          value: $(params.s3-credentials)
+        - name: az-credentials
+          value: $(params.az-credentials)
         - name: crc-scm-pr
           value: $(params.crc-scm-pr)
         - name: s3-folder-path
           value: $(params.s3-path)
-      workspaces:
-        - name: pipelines-data
-          workspace: storage
-        - name: az-credentials
-          workspace: az-credentials
-        - name: s3-credentials
-          workspace: s3-credentials
     - name: provision-tester
       runAfter:
         - init
@@ -208,7 +173,7 @@ spec:
             value: tkn/infra-aws-fedora.yaml
       params:
         - name: secret-aws-credentials
-          value: aws-crcqe-bot
+          value: $(params.aws-credentials)
         - name: secret-rh-credentials
           value: credentials-rh-subs-crcqe-prod
         - name: id
@@ -408,7 +373,7 @@ spec:
             value: s3-uploader/tkn/task.yaml
       params:
         - name: aws-credentials
-          value: aws-crcqe-bot
+          value: $(params.aws-credentials)
         - name: pvc
           value: pipelines-data
         - name: ws-output-path
@@ -436,7 +401,7 @@ spec:
             value: tkn/infra-aws-fedora.yaml
       params:
         - name: secret-aws-credentials
-          value: aws-crcqe-bot
+          value: $(params.aws-credentials)
         - name: secret-rh-credentials
           value: credentials-rh-subs-crcqe-prod
         - name: id

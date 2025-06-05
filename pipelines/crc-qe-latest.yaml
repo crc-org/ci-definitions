@@ -23,26 +23,6 @@ spec:
 
   workspaces:
     - name: storage
-    - name: builder-host-info
-      description: |
-        ocp secret holding the hsot info credentials. Secret should be accessible to this task.
-        ---
-        apiVersion: v1
-        kind: Secret
-        metadata:
-          name: XXXX
-          labels:
-            app.kubernetes.io/component: XXXX
-        type: Opaque
-        data:
-          host: XXXX
-          user: XXXX
-          password: XXXX
-          key: XXXX
-          platform: XXXX
-          os-version: XXXX
-          arch: XXXX
-          os: XXXX
     - name: ocp-pullsecret
       description: |
         crc secret name holding the pullsecret. This is only required if backed tested is crc preset
@@ -56,23 +36,6 @@ spec:
         type: Opaque
         data:
           pullsecret: ${pullsecret-value}
-    - name: s3-credentials
-      description: |
-        ocp secret holding the s3 credentials. Secret should be accessible to this task.
-        ---
-        apiVersion: v1
-        kind: Secret
-        metadata:
-          name: XXXX
-          labels:
-            app.kubernetes.io/component: XXXX
-        type: Opaque
-        data:
-          download-url: ${download_url}
-          upload-url: ${upload_url}
-          bucket: ${bucket_value}
-          access-key: ${access_key}
-          secret-key: ${secret_key}
 
   params:
     - name: secret-tester
@@ -95,6 +58,28 @@ spec:
           os-version: XXXX
           arch: XXXX
           os: XXXX
+    - name: secret-builder
+      description: |
+        ocp secret holding the hsot info credentials. Secret should be accessible to this task.
+        ---
+        apiVersion: v1
+        kind: Secret
+        metadata:
+          name: XXXX
+          labels:
+            app.kubernetes.io/component: XXXX
+        type: Opaque
+        data:
+          host: XXXX
+          user: XXXX
+          password: XXXX
+          key: XXXX
+          platform: XXXX
+          os-version: XXXX
+          arch: XXXX
+          os: XXXX
+    - name: s3-credentials
+      default: s3-aws-crcqe-asia
     # Existing components
     - name: bundle-base-url
       description: base url to download bundle and shasumsfile
@@ -252,10 +237,14 @@ spec:
           - name: url
             value: https://github.com/crc-org/ci-definitions
           - name: revision
-            value: crc-builder-v1.0.4
+            value: crc-builder-v1.1.0
           - name: pathInRepo
             value: crc-builder/tkn/crc-builder-installer.yaml
       params:
+        - name: s3-credentials
+          value: $(params.s3-credentials)
+        - name: host-info
+          value: $(params.secret-builder)
         - name: os
           value: $(tasks.init.results.os)
         - name: crc-scm-pr
@@ -264,11 +253,6 @@ spec:
           value: $(params.s3-path)
         - name: vfkit-scm-ref
           value: $(params.vfkit-scm-ref)
-      workspaces:
-        - name: s3-credentials
-          workspace: s3-credentials
-        - name: host-info
-          workspace: builder-host-info
       timeout: "30m"
     - name: build-binary
       when:
@@ -283,27 +267,29 @@ spec:
           - name: url
             value: https://github.com/crc-org/ci-definitions
           - name: revision
-            value: crc-builder-v1.0.4
+            value: crc-builder-v1.1.0
           - name: pathInRepo
             value: crc-builder/tkn/crc-builder.yaml
       params:
+        - name: s3-credentials
+          value: $(params.s3-credentials)
         - name: crc-scm-pr
           value: $(params.crc-scm-pr)
         - name: s3-folder-path
           value: $(params.s3-path)
-      workspaces:
-        - name: s3-credentials
-          workspace: s3-credentials
       timeout: "30m"
     - name: sync-build
       runAfter:
         - init
       taskSpec:
         description: This task will check if an assets exists through a http request
-        workspaces:
+        volumes:
           - name: s3-credentials
-            mountPath: /opt/s3-credentials
+            secret:
+              secretName: $(params.s3-credentials)   
+            
         params:
+          - name: s3-credentials
           - name: s3-path
           - name: os
           - name: loop
@@ -322,6 +308,9 @@ spec:
         steps:
           - name: check
             image: registry.access.redhat.com/ubi9/ubi-minimal
+            volumeMounts:
+              - name: s3-credentials
+                mountPath: /opt/s3-credentials
             script: |
               #!/bin/sh
 
@@ -364,11 +353,9 @@ spec:
               echo -n "${url}" | tee $(results.asset-url.path)
               echo -n "${asset}" | tee $(results.asset-name.path)
               echo -n "${shasum}" | tee $(results.asset-shasum.path)
-
-      workspaces:
-        - name: s3-credentials
-          workspace: s3-credentials
       params:
+        - name: s3-credentials
+          value: $(params.s3-credentials)
         - name: s3-path
           value: $(params.s3-path)
         - name: os
