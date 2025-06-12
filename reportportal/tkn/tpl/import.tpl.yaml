@@ -116,10 +116,26 @@ spec:
       url=$(cat /opt/reportportal-credentials/url)
       token=$(cat /opt/reportportal-credentials/token)
       project=$(cat /opt/reportportal-credentials/project)
+      description=""
+      if [[ $failFlag != 'true' ]]; then
+        description="$(params.launch-description)"
+      else
+        description="$(params.results-id)"
+      fi
       upload=`curl -k -X POST "${url}/api/v1/${project}/launch/import" \
           -H "accept: */*" -H "Content-Type: multipart/form-data" \
           -H "Authorization: bearer ${token}" \
-          -F "file=@$fileName.zip"`
+          -F "file=@$fileName.zip" \
+          -F "launchImportRq={
+            \"attributes\": [
+              {
+                \"key\": \"skippedIsNotIssue\",
+                \"system\": true,
+                \"value\": \"true\"
+              }
+            ],
+            \"description\": \"${description}\"
+          };type=application/json"`
       uuid=`echo ${upload#*= } | cut -d " " -f1`
       getid=`curl -k -X GET "${url}/api/v1/${project}/launch/uuid/${uuid}" \
           -H "accept: */*" -H  "Authorization: bearer ${token}"`
@@ -128,16 +144,7 @@ spec:
         curl -k -X PUT "${url}/api/v1/${project}/launch/${launchId}/update" \
             -H "accept: */*" -H "Content-Type: application/json" \
             -H "Authorization: bearer ${token}" \
-            -d '{"description": "$(params.launch-description)"}'
-        curl -k -X PUT "${url}/api/v1/${project}/launch/${launchId}/update" \
-            -H "accept: */*" -H "Content-Type: application/json" \
-            -H "Authorization: bearer ${token}" \
             -d '$(params.launch-attributes)'
-      else
-        curl -k -X PUT "${url}/api/v1/${project}/launch/${launchId}/update" \
-            -H "accept: */*" -H "Content-Type: application/json" \
-            -H "Authorization: bearer ${token}" \
-            -d '{"description": "$(params.results-id)"}'
       fi
 
       # delete the folder in pvc
