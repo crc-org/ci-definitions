@@ -9,11 +9,11 @@ metadata:
     tekton.dev/pipelines.minVersion: "0.24.x"
     tekton.dev/categories: data
     tekton.dev/tags: "data, results"
-    tekton.dev/displayName: "report portal import"
+    tekton.dev/displayName: "report portal import form oras"
     tekton.dev/platforms: "linux/amd64"
 spec:
   description: |
-    Task to import junit results into report portal
+    Task to import xml test results from oras into report portal
   
   params:
   - name: secret-reportportal
@@ -31,14 +31,13 @@ spec:
         url: XXXX
         project: XXXX
     default: reportportal-crc
-  - name: pvc
-    description: The persistentVolumeClaim name that contains the xml file to be imported to reportportal
-    default: pipelines-data
+  - name: oras-address
+    default: ""
+    description: The oras address that contains the test results
   - name: results-id
     description: Identifier for the results. Typically will include metadata about the environment or the product
-  - name: results-wsstorage-path
-    description: path within the storage workspace for the results file to be uploaded
   - name: launch-attributes
+    default: "''"
     description: |
       The attributes for the launch, will show as tag in reportportal. 
       The value format is 
@@ -57,22 +56,29 @@ spec:
       If true, the task will gather current pipeline-run logs to xml, then upload to reportportal.
       So recommend put this task in Final block of pipeline. 
   - name: pipelinerunName
-    default: $(context.pipelineRun.name)
-    description: the pipelinerun name which log be uploaded to reportportal 
+    description: |
+      the pipelinerun name which log be uploaded to reportportal. 
+      value set as $(context.pipelineRun.name) 
 
   steps:
+  - name: oras-pull
+    image: ghcr.io/oras-project/oras:v1.2.3
+    volumeMounts:
+      - name: orsa-asset
+        mountPath: /workspace
+    args: 
+      - pull
+      - $(params.oras-address) 
   - name: import
     image: quay.io/crc-org/reportportal:v1.0.0 #v0.0.5
     imagePullPolicy: Always
     volumeMounts:
       - name: reportportal-credentials
         mountPath: /opt/reportportal-credentials
-      - name: storage
-        mountPath: /opt/storage
+      - name: orsa-asset
+        mountPath: /opt/orsa
     script: |
       #!/bin/sh
-      set -e
-      set -x
 
       # If debug add verbosity
       if [[ $(params.debug) == "true" ]]; then
@@ -94,24 +100,17 @@ spec:
       fi
 
       failFlag='false'
-      # Prepare results
-      if find "/opt/storage/$(params.results-wsstorage-path)" -maxdepth 1 -name "*.xml" -print -quit | grep -q .; then
-        cp /opt/storage/$(params.results-wsstorage-path)/*.xml .
-      else
-        failFlag='true'
-      fi
-      # remove the xml file if its size is 0 byte
-      # find "/opt/storage/$(params.results-wsstorage-path)" -type f -name "*.xml" -size 0 -exec rm {} \;
-
-
-      # Compress
-      if [[ $failFlag == 'true' ]]; then
-        fileName="fail-pipelinerun"
-      else
+      ls /opt/orsa/*.xml
+      if [[ $? -eq 0 ]]; then
+        echo "copy xml fiel form oras" 
+        cp /opt/orsa/*.xml .
         fileName=$(params.results-id)
+      else
+          failFlag='true'
+          fileName="fail-pipelinerun"
       fi
-
       zip "$fileName.zip" *.xml
+
       # Import
       url=$(cat /opt/reportportal-credentials/url)
       token=$(cat /opt/reportportal-credentials/token)
@@ -147,14 +146,6 @@ spec:
             -d '$(params.launch-attributes)'
       fi
 
-      # delete the folder in pvc
-      path=$(params.results-wsstorage-path)
-      IFS='/' read -ra folder <<< "$path"
-      if [ -d "/opt/storage/$folder" ]; then
-        ls /opt/storage/$folder
-        rm -r /opt/storage/$folder
-      fi
-
     resources:      
       requests:
         memory: "100Mi"
@@ -164,12 +155,9 @@ spec:
         cpu: "100m"
 
   volumes:
-    - name: storage
-      description: storage volume where to find the results to be imported
-      persistentVolumeClaim:
-        claimName: $(params.pvc)
     - name: reportportal-credentials
       secret:
         secretName: $(params.secret-reportportal)
+    - name: orsa-asset
     
     
