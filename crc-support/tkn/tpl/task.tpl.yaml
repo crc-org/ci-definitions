@@ -21,8 +21,7 @@ spec:
     - name: host-secret
       secret:
         secretName: $(params.secret-host)
-    - name: orsa-asset      
-
+    - name: v-image-asset      
   
   params:
     # OS parameter
@@ -52,10 +51,16 @@ spec:
     # Assets parameter
     - name: asset-base-url
       description: base url for the asset to be downloaded
-      default: ""
+      default: "''"
     - name: asset-oras-address
       description: the oras address of the asset
       default: ""
+    - name: asset-image-address
+      default: ""
+      description: The image that contains the asset
+    - name: asset-image-path
+      default: "/opt"
+      description: The path within the container of the assest
     - name: asset-name
       description: name for the asset to be downloaded
     - name: asset-shasum-name
@@ -94,18 +99,32 @@ spec:
         operator: notin
         values: [""]
     volumeMounts:
-      - name: orsa-asset
+      - name: v-image-asset
         mountPath: /workspace
     args: 
       - pull
       - $(params.asset-oras-address) 
+  - name: get-image-content
+    image: $(params.asset-image-address)
+    when:
+      - input: "$(params.asset-image-address)"
+        operator: notin
+        values: [""]
+    volumeMounts:
+      - name: v-image-asset
+        mountPath: /opt/asset
+    script: |
+      #!/bin/bash
+      set -x
+      cp $(params.asset-image-path)/$(params.asset-name) /opt/asset/
+
   - name: preparer
     image: cimage:cversion-$(params.os) 
     imagePullPolicy: Always
     volumeMounts:
       - name: host-secret
         mountPath: /opt/host
-      - name: orsa-asset
+      - name: v-image-asset
         mountPath: /opt/asset
     script: |
       #!/bin/bash

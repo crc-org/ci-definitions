@@ -30,7 +30,11 @@ check_download() {
 
 # $1 file name for crc installer
 installCRC() {
-    sudo installer -pkg ${1} -target /
+    if [[ ${1} == *.pkg ]]; then
+        sudo installer -pkg ${1} -target /
+    else
+        sudo cp ${1} /usr/local/bin/
+    fi
 }
 
 
