@@ -1,0 +1,121 @@
+---
+apiVersion: tekton.dev/v1beta1
+kind: Pipeline
+metadata:
+  name: integration-fedora-test
+spec:
+  description: >-
+    This pipeline used Konflux integration test, 
+    will run the testing for openshift local on Fedora based on nested virtualization.
+  params:
+    - name: SNAPSHOT
+      type: string
+  tasks:
+    - name: init
+      taskSpec:
+        params:
+          - name: SNAPSHOT
+            type: string
+        results:
+          - name: output-image
+          - name: correlation
+        steps:
+          - name: get
+            image: quay.io/konflux-ci/konflux-test:stable
+            script: |
+              #!/bin/sh
+              SNAPSHOT='$(params.SNAPSHOT)'
+              echo $SNAPSHOT
+              COMPONENT_CONTAINER_IMAGE=$(jq -r --arg component_name "crc-binary" '.components[] | select(.name == $component_name) | .containerImage' <<< "${SNAPSHOT}")
+              echo ${COMPONENT_CONTAINER_IMAGE}
+              echo -n "${COMPONENT_CONTAINER_IMAGE}" | tee $(results.output-image.path)
+              echo -n "$(date +%s%N)" | tee $(results.correlation.path)
+      params:
+        - name: SNAPSHOT
+          value: $(params.SNAPSHOT)  
+    - name: provision-fedora
+      taskRef: 
+        resolver: git
+        params:
+          - name: url
+            value: https://github.com/redhat-developer/mapt
+          - name: revision
+            value: v0.9.5
+          - name: pathInRepo
+            value: tkn/infra-aws-fedora.yaml
+      params:
+        - name: secret-aws-credentials
+          value: aws-crcqe-bot
+        - name: id
+          value: $(tasks.init.results.correlation)
+        - name: operation
+          value: create
+        - name: ownerKind
+          value: PipelineRun
+        - name: ownerName
+          value: $(context.pipelineRun.name)
+        - name: ownerUid
+          value: $(context.pipelineRun.uid)
+        - name: nested-virt
+          value: 'true'
+        - name: version
+          value: "41"  
+        - name: tags
+          value: "pipelinerunName=$(context.pipelineRun.name)"
+      runAfter:
+        - init
+    - name: install-crc
+      taskRef:
+        resolver: git
+        params:
+          - name: url
+            value: https://github.com/crc-org/ci-definitions
+          - name: revision
+            value: main
+          - name: pathInRepo
+            value: crc-support/tkn/task.yaml
+      runAfter:
+        - provision-fedora
+      params:
+        - name: os
+          value: "linux"
+        - name: secret-host
+          value: $(tasks.provision-fedora.results.host-access-secret)
+        - name: asset-image-address
+          value: $(tasks.init.results.output-image)
+        - name: asset-image-path
+          value: "/opt/linux-amd64"
+        - name: asset-name
+          value: "crc"
+        - name: install
+          value: "true"
+        - name: force-fresh
+          value: "false"
+        - name: download
+          value: "false"
+        - name: debug
+          value: "true"
+  finally:
+    - name: decommission-fedora
+      taskRef:
+        resolver: git
+        params:
+          - name: url
+            value: https://github.com/redhat-developer/mapt
+          - name: revision
+            value: v0.9.5
+          - name: pathInRepo
+            value: tkn/infra-aws-fedora.yaml
+      params:
+        - name: secret-aws-credentials
+          value: aws-crcqe-bot
+        - name: operation
+          value: destroy
+        - name: id
+          value: $(tasks.init.results.correlation)
+        - name: ownerKind
+          value: PipelineRun
+        - name: ownerName
+          value: $(context.pipelineRun.name)
+        - name: ownerUid
+          value: $(context.pipelineRun.uid)
