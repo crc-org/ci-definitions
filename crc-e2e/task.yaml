@@ -1,0 +1,325 @@
+---
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: crc-e2e-test
+  labels:
+    app.kubernetes.io/version: "1.0.0"
+    redhat.com/product: openshift-local
+    dev.lifecycle.io/phase: testing
+  annotations:
+    tekton.dev/pipelines.minVersion: "0.24.x"
+    tekton.dev/categories: openshift-local
+    tekton.dev/tags: openshift-local, testing
+    tekton.dev/displayName: "testing for openshift local"
+    tekton.dev/platforms: "linux/amd64"
+spec:
+  description: >-
+    This task will run qe testing on an openshift local instance running on a remote target host. 
+
+    This task run set of tests of choice: integration or e2e or both. Or even allow to run specific
+    scenarios based on tags
+  volumes:
+    - name: host-secret
+      secret:
+        secretName: $(params.secret-host)
+    - name: pull-secret
+      secret: 
+        secretName: $(params.pull-secret)
+    - name: test-result
+    - name: quay-credential
+      secret: 
+        secretName: $(params.secret-quay)
+  params:
+    # correlate params
+    - name: workspace-resources-path
+      description: path on workspace to find resources to connect and managed provisioned machine
+    - name: pull-secret
+      default: crc-crc-qe
+      description: |
+        crc secret name holding the pullsecret. This is only required if backed tested is crc preset
+
+        secret should match following format:
+        ---
+        apiVersion: v1
+        kind: Secret
+        metadata:
+          name: ${secret-name}
+        type: Opaque
+        data:
+          pullsecret: ${pullsecret-value}
+    # target platform /arch params
+    - name: os
+      description: type of platform per target host (linux, windows, macos)
+      default: linux
+    - name: arch
+      description: type of arch (amd64, arm64). Defaults amd64
+      default: amd64
+    - name: secret-host
+      description: |
+        ocp secret holding the hsot info credentials. Secret should be accessible to this task.
+        ---
+        apiVersion: v1
+        kind: Secret
+        metadata:
+          name: XXXX
+          labels:
+            app.kubernetes.io/component: XXXX
+        type: Opaque
+        data:
+          host: XXXX
+          username: XXXX
+          password: XXXX
+          id_rsa: XXXX
+          platform: XXXX
+          os-version: XXXX
+          arch: XXXX
+          os: XXXX
+    - name: secret-quay
+      default: registry-quay-io-crcont-qeplatform
+    # crc params
+    - name: crc-version
+      description: crc version to be tested (i.e 2.34.1)
+      # default: latest
+    - name: bundle-location
+      description: custom bundle already downloaded on the target host. 
+      default: "''"  
+    # control params
+    - name: cleanup-home
+      description: control whether to remove crc home folder before runing e2e suite
+      default: 'false'
+    - name: run-e2e
+      description: Control if e2e tests are executed. (true or false)
+      default: 'true'
+    - name: e2e-tag
+      description: tags to select e2e scnearios. Default empty values which means all scnearios  
+      default: "''"  
+    - name: e2e-junit-name
+      description: set the name for the junit results file for e2e
+      default: e2e-junit.xml
+    - name: e2e-custom-memory
+      description: If we want to customize the base memory to run the e2e we can set this value
+      default: "''"  
+    - name: e2e-cleanup-target
+      description: To cleanup remote folder after running e2e
+      default: "true"  
+    - name: run-integration
+      description: Control if integration tests are executed. (true or false)
+      default: 'true'
+    - name: integration-tag
+      description: tags to select integration scenarios. Default empty values which means all scnearios  
+      default: "''"  
+    - name: integration-timeout
+      description: total timeout for run integration suite
+      default: "90m"  
+    - name: integration-junit-name
+      description: set the name for the junit results file for integration
+      default: integration-junit.xml
+    - name: integration-cleanup-target
+      description: To cleanup remote folder after running integration
+      default: "true"  
+    - name: worspace-qe-subpath
+      description: subpath relative to workspace path where results are stored
+      default: qe-results
+    - name: debug
+      description: debug purposes extend verbosity on cmds executed on the target
+      default: 'false'
+    
+  results:
+    - name: e2e-duration
+      description: total amount of time in seconds for the e2e execution
+    - name: integration-duration
+      description: total amount of time in seconds for the integration execution
+    - name: result-oras-image
+      description: the oras image that contains the test results
+
+  steps:
+    - name: e2e
+      image: quay.io/crcont/crc-e2e:v$(params.crc-version)-$(params.os)-$(params.arch)
+      imagePullPolicy: Always
+      volumeMounts:
+        - name: host-secret
+          mountPath: /opt/host
+        - name: pull-secret
+          mountPath: /opt/pullsecret
+        - name: test-result
+          mountPath: /opt/testresult
+      env:
+      - name: OUTPUT_FOLDER
+        value: /opt/testresult/$(params.worspace-qe-subpath) 
+      script: |
+        #!/bin/bash
+
+        set -o pipefail
+
+        # If debug add verbosity
+        if [[ $(params.debug) == "true" ]]; then
+          set -exuo pipefail
+        fi
+        
+        if [[ $(params.run-e2e) == "true" ]]; then
+          # Prepare ENVs
+          SECONDS=0
+          DEBUG=$(params.debug)
+          TARGET_HOST=$(cat /opt/host/host)
+          TARGET_HOST_USERNAME=$(cat /opt/host/username)
+          cp /opt/host/id_rsa /opt/id_rsa
+          TARGET_HOST_KEY_PATH=/opt/id_rsa
+          chmod 600 ${TARGET_HOST_KEY_PATH}
+          TARGET_FOLDER=crc-e2e
+          TARGET_RESULTS=results
+          TARGET_CLEANUP=$(params.e2e-cleanup-target)
+          # Create output folder
+          mkdir -p "${OUTPUT_FOLDER}"
+
+          # Pull secret (if exists)
+          if test -f /opt/pullsecret/pullsecret; then
+            # ASSETS_FOLDER ENV is defined at Containerfile
+            # All assets inside that folder will be copied to the target host
+            cp /opt/pullsecret/pullsecret ${ASSETS_FOLDER}/pull-secret
+          fi
+
+          # Create cmd per OS
+          runner="run.sh"
+          if [[ $(params.os) == "windows" ]]; then
+            runner="run.ps1"
+          fi
+          cmd="${TARGET_FOLDER}/${runner} -targetFolder ${TARGET_FOLDER} "
+          cmd="$cmd -junitFilename $(params.e2e-junit-name) "
+          if [[ $(params.bundle-location) != "" ]]; then
+            cmd="$cmd -bundleLocation $(params.bundle-location) "
+          fi
+          if [[ $(params.e2e-tag) != "" ]]; then
+            cmd="$cmd -e2eTagExpression '$(params.e2e-tag)' "
+          fi
+          if [[ $(params.e2e-custom-memory) != "" ]]; then
+            cmd="$cmd -crcMemory $(params.e2e-custom-memory) "
+          fi
+        
+          # Exec
+          . entrypoint.sh "${cmd}"
+
+          # Move all results to qe-path
+          mv ${OUTPUT_FOLDER}/${TARGET_RESULTS}/* ${OUTPUT_FOLDER}
+          rm -rf ${OUTPUT_FOLDER}/${TARGET_RESULTS}
+
+          echo -n "${SECONDS}" | tee $(results.e2e-duration.path)
+        fi
+      resources:      
+        requests:
+          memory: "50Mi"
+          cpu: "5m"
+        limits:
+          memory: "70Mi"
+          cpu: "10m"
+    - name: clean-config
+      image: quay.io/rhqp/deliverest:v0.0.6
+      volumeMounts:
+        - name: host-secret
+          mountPath: /opt/host
+      script: |
+        #!/bin/sh
+        set -e
+        set -x
+        TARGET_HOST=$(cat /opt/host/host)
+        TARGET_HOST_USERNAME=$(cat /opt/host/username)
+        cp /opt/host/id_rsa /opt/id_rsa
+        chmod 600 /opt/id_rsa
+        if [[ $(params.run-e2e) == "true" ]]; then
+          ssh -i /opt/id_rsa \
+              -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+              ${TARGET_HOST_USERNAME}@${TARGET_HOST} 'rm ~/.crc/crc.json' | true
+        fi
+    - name: integration
+      image: quay.io/crcont/crc-integration:v$(params.crc-version)-$(params.os)-$(params.arch)
+      imagePullPolicy: Always  
+      volumeMounts:
+        - name: host-secret
+          mountPath: /opt/host
+        - name: pull-secret
+          mountPath: /opt/pullsecret
+        - name: test-result
+          mountPath: /opt/testresult
+      env:
+      - name: OUTPUT_FOLDER
+        value: /opt/testresult/$(params.worspace-qe-subpath) 
+      script: |
+        #!/bin/sh
+
+        set pipefail
+
+        # If debug add verbosity
+        if [[ $(params.debug) == "true" ]]; then
+          set -exuo pipefail
+        fi
+
+        if [[ $(params.run-integration) == "true" ]]; then
+          # Prepare ENVs
+          SECONDS=0
+          DEBUG=$(params.debug)
+          TARGET_HOST=$(cat /opt/host/host)
+          TARGET_HOST_USERNAME=$(cat /opt/host/username)
+          cp /opt/host/id_rsa /opt/id_rsa
+          TARGET_HOST_KEY_PATH=/opt/id_rsa
+          chmod 600 ${TARGET_HOST_KEY_PATH}
+          TARGET_FOLDER=crc-integration
+          TARGET_RESULTS=results
+          TARGET_CLEANUP=$(params.integration-cleanup-target)
+          # Create output folder
+          mkdir -p "${OUTPUT_FOLDER}"
+
+          # Pull secret (if exists)
+          if test -f /opt/pullsecret/pullsecret; then
+            # ASSETS_FOLDER ENV is defined at Containerfile
+            # All assets inside that folder will be copied to the target host
+            cp /opt/pullsecret/pullsecret ${ASSETS_FOLDER}/pull-secret
+          fi
+
+          # Create cmd per OS
+          runner="run.sh"
+          if [[ $(params.os) == "windows" ]]; then
+            runner="run.ps1"
+          fi
+          cmd="${TARGET_FOLDER}/${runner} -targetFolder ${TARGET_FOLDER} "
+          cmd="$cmd -junitFilename $(params.integration-junit-name) "
+          cmd="$cmd -suiteTimeout $(params.integration-timeout) "
+          if [[ $(params.bundle-location) != "" ]]; then
+            cmd="$cmd -bundleLocation $(params.bundle-location) "
+          fi
+          if [[ "$(params.integration-tag)" != "" ]]; then
+            cmd="$cmd -labelFilter '$(params.integration-tag)' "
+          fi
+          
+          # Exec
+          . entrypoint.sh "${cmd}"
+
+          # Move all results to qe-path
+          mv ${OUTPUT_FOLDER}/${TARGET_RESULTS}/* ${OUTPUT_FOLDER}
+          rm -rf ${OUTPUT_FOLDER}/${TARGET_RESULTS}
+
+          echo -n "${SECONDS}" | tee $(results.integration-duration.path)
+        fi
+      resources:      
+        requests:
+          memory: "50Mi"
+          cpu: "5m"
+        limits:
+          memory: "70Mi"
+          cpu: "10m"      
+    - name: upload-to-orsa
+      image: ghcr.io/oras-project/oras:v1.2.3
+      volumeMounts:
+        - name: test-result
+          mountPath: /workspace
+        - name: quay-credential
+          mountPath: /opt/quay
+      script: |
+        #!/bin/sh
+        set -e
+        set -x
+        tar -cvf test-result.tar $(params.worspace-qe-subpath)
+        mkdir -p /root/.docker
+        cp /opt/quay/.dockerconfigjson  /root/.docker/config.json
+        tag=$(date +"%y-%m-%d")-$(params.os)-$(params.arch)-$(params.workspace-resources-path)
+        oras push quay.io/crcont/test-result:${tag} test-result.tar
+        echo -n "quay.io/crcont/test-result:${tag}" | tee $(results.result-oras-image.path)
