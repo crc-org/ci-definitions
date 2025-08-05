@@ -10,6 +10,15 @@ spec:
   params:
     - name: SNAPSHOT
       type: string
+    - name: qe-worspace-subpath
+      default: qe-results
+  results:
+    - name: e2e-results-url
+      description: url with e2e junit results file
+      value: $(tasks.s3-upload-results.results.e2e-junit-url)
+    - name: integration-results-url
+      description: url with integration junit results file
+      value: $(tasks.s3-upload-results.results.integration-junit-url)
   tasks:
     - name: init
       taskSpec:
@@ -19,6 +28,7 @@ spec:
         results:
           - name: output-image
           - name: correlation
+          - name: revision
         steps:
           - name: get
             image: quay.io/konflux-ci/konflux-test:stable
@@ -28,8 +38,11 @@ spec:
               echo $SNAPSHOT
               COMPONENT_CONTAINER_IMAGE=$(jq -r --arg component_name "crc-binary" '.components[] | select(.name == $component_name) | .containerImage' <<< "${SNAPSHOT}")
               echo ${COMPONENT_CONTAINER_IMAGE}
+              
+              revision=$(jq -r --arg component_name "crc-binary" '.components[] | select(.name == $component_name) | .source.git.revision' <<< "${SNAPSHOT}")
               echo -n "${COMPONENT_CONTAINER_IMAGE}" | tee $(results.output-image.path)
               echo -n "$(date +%s%N)" | tee $(results.correlation.path)
+              echo -n "$(date +"%y-%m-%d")-${revision}" | tee $(results.revision.path)
       params:
         - name: SNAPSHOT
           value: $(params.SNAPSHOT)  
@@ -40,7 +53,7 @@ spec:
           - name: url
             value: https://github.com/redhat-developer/mapt
           - name: revision
-            value: v0.9.5
+            value: v0.8.0
           - name: pathInRepo
             value: tkn/infra-aws-fedora.yaml
       params:
@@ -95,6 +108,73 @@ spec:
           value: "false"
         - name: debug
           value: "true"
+    - name: qe
+      runAfter:
+        - install-crc
+      taskRef:
+        resolver: git
+        params:
+        - name: url
+          value: https://github.com/crc-org/ci-definitions
+        - name: revision
+          value: main
+        - name: pathInRepo
+          value: crc-e2e/task.yaml
+      params:
+        - name: secret-host
+          value: $(tasks.provision-fedora.results.host-access-secret)
+        - name: os
+          value: "linux"
+        - name: arch
+          value: "amd64"
+        - name: pull-secret
+          value: crc-crc-qe
+        - name: secret-quay
+          value: registry-quay-io-crcont-qeplatform
+        - name: workspace-resources-path
+          value: $(tasks.init.results.correlation)
+        - name: worspace-qe-subpath
+          value: $(params.qe-worspace-subpath)
+        - name: crc-version
+          value: "next"
+        - name: bundle-location
+          value: "''"
+        - name: run-e2e
+          value: "true" 
+        - name: e2e-tag
+          value: "@story_openshift" 
+        - name: e2e-cleanup-target
+          value: "true" 
+        - name: run-integration
+          value: "true"
+        - name: integration-tag
+          value: "! microshift-preset"
+        - name: integration-cleanup-target
+          value: "true" 
+      timeout: "5h" 
+    - name: s3-upload-results
+      runAfter:
+      - qe
+      taskRef:
+        resolver: git
+        params:
+          - name: url
+            value: https://github.com/crc-org/ci-definitions
+          - name: revision
+            value: main
+          - name: pathInRepo
+            value: s3-uploader/tkn/task-oras.yaml
+      params:
+        - name: aws-credentials
+          value: aws-crcqe-bot
+        - name: oras-address
+          value: $(tasks.qe.results.result-oras-image)
+        - name: qe-workspace-subpath
+          value: $(params.qe-worspace-subpath)
+        - name: s3-bucket
+          value: "crcqe-asia"
+        - name: s3-path
+          value: konflux/crc/$(tasks.init.results.revision)/fedora41
   finally:
     - name: decommission-fedora
       taskRef:
@@ -103,7 +183,7 @@ spec:
           - name: url
             value: https://github.com/redhat-developer/mapt
           - name: revision
-            value: v0.9.5
+            value: v0.8.0
           - name: pathInRepo
             value: tkn/infra-aws-fedora.yaml
       params:
