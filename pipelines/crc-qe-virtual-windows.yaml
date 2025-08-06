@@ -1,0 +1,139 @@
+---
+apiVersion: tekton.dev/v1beta1
+kind: Pipeline
+metadata:
+  name: integration-windows-test
+spec:
+  description: >-
+    This pipeline will run the testing for openshift local on 
+    windows based on nested virtualization
+  params:
+    - name: SNAPSHOT
+      type: string
+    - name: windows-version
+      default: "11"
+      type: sting 
+    - name: windows-featurepack
+      default: "23h2-ent"
+      type: sting 
+  tasks:
+    - name: init
+      taskSpec:
+        params:
+          - name: SNAPSHOT
+            type: string
+        results:
+          - name: output-image
+          - name: correlation
+        steps:
+          - name: get
+            image: quay.io/konflux-ci/konflux-test:stable
+            env:
+              - name: SNAPSHOT
+                value: $(params.SNAPSHOT)
+            script: |
+              #!/bin/sh
+              echo $SNAPSHOT
+              COMPONENT_CONTAINER_IMAGE=$(jq -r --arg component_name "crc-release" '.components[] | select(.name == $component_name) | .containerImage' <<< "${SNAPSHOT}")
+              echo ${COMPONENT_CONTAINER_IMAGE}
+              echo -n "${COMPONENT_CONTAINER_IMAGE}" | tee $(results.output-image.path)
+              echo -n $RANDOM$RANDOM | tee $(results.correlation.path)
+      params:
+        - name: SNAPSHOT
+          value: $(params.SNAPSHOT)  
+    - name: get-content
+      taskSpec:
+        params:
+          - name: image-name
+            type: string
+        results:
+          - name: orasAddress
+        steps:
+          - name: check-folder
+            image: $(params.image-name)
+            script: |
+              #!/bin/sh
+              ls /opt
+              roasAddress=$(sed -n '1p' /opt/release-info)
+              echo -n $roasAddress | tee $(results.orasAddress.path)
+      params:
+        - name: image-name
+          value: $(tasks.init.results.output-image)
+    - name: provision-windows
+      taskRef: 
+        resolver: git
+        params:
+          - name: url
+            value: https://github.com/redhat-developer/mapt
+          - name: revision
+            value: v0.9.0
+          - name: pathInRepo
+            value: tkn/infra-azure-windows-desktop.yaml
+      params:
+        - name: secret-az-credentials
+          value: az-crcqe-bot
+        - name: windows-featurepack
+          value: $(params.windows-featurepack)
+        - name: windows-version
+          value: $(params.windows-version)
+        - name: id
+          value: $(tasks.init.results.correlation)
+        - name: operation
+          value: create
+        - name: ownerKind
+          value: 'PipelineRun'
+        - name: ownerName
+          value: $(context.pipelineRun.name)
+        - name: ownerUid
+          value: $(context.pipelineRun.uid)
+        - name: tags
+          value: 'cicd=konflux,pipelinerun=$(context.pipelineRun.name)'
+    - name: install-crc
+      taskRef:
+        resolver: git
+        params:
+          - name: url
+            value: https://github.com/crc-org/ci-definitions
+          - name: revision
+            value: main
+          - name: pathInRepo
+            value: crc-support/tkn/task.yaml
+      params:
+        - name: os
+          value: windows
+        - name: secret-host
+          value: $(tasks.provision-windows.results.host-access-secret)
+        - name: asset-base-url
+          value: "test"
+        - name: asset-oras-address
+          value: $(tasks.get-content.results.orasAddress)
+        - name: asset-name
+          value: "crc-windows-installer.zip"
+        - name: install
+          value: "true"
+        - name: force-fresh
+          value: "false"
+  finally:
+    - name: decommission-windows
+      taskRef:
+        resolver: git
+        params:
+          - name: url
+            value: https://github.com/redhat-developer/mapt
+          - name: revision
+            value: v0.9.0
+          - name: pathInRepo
+            value: tkn/infra-azure-windows-desktop.yaml
+      params:
+        - name: secret-az-credentials
+          value: az-crcqe-bot
+        - name: id
+          value: $(tasks.init.results.correlation)
+        - name: operation
+          value: destroy
+        - name: ownerKind
+          value: 'PipelineRun'
+        - name: ownerName
+          value: $(context.pipelineRun.name)
+        - name: ownerUid
+          value: $(context.pipelineRun.uid)

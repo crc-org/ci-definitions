@@ -1,0 +1,136 @@
+---
+apiVersion: tekton.dev/v1beta1
+kind: Pipeline
+metadata:
+  name: integration-fedora-test
+spec:
+  description: >-
+    This pipeline will run the testing for openshift local on 
+    fedora based on nested virtualization
+  params:
+    - name: SNAPSHOT
+      type: string
+    - name: version
+      default: '41'
+      type: string
+  tasks:
+    - name: init
+      taskSpec:
+        params:
+          - name: SNAPSHOT
+            type: string
+        results:
+          - name: output-image
+          - name: correlation
+        steps:
+          - name: get
+            image: quay.io/konflux-ci/konflux-test:stable
+            env:
+              - name: SNAPSHOT
+                value: $(params.SNAPSHOT)
+            script: |
+              #!/bin/sh
+              echo $SNAPSHOT
+              COMPONENT_CONTAINER_IMAGE=$(jq -r --arg component_name "crc-release" '.components[] | select(.name == $component_name) | .containerImage' <<< "${SNAPSHOT}")
+              echo ${COMPONENT_CONTAINER_IMAGE}
+              echo -n "${COMPONENT_CONTAINER_IMAGE}" | tee $(results.output-image.path)
+              echo -n $RANDOM$RANDOM | tee $(results.correlation.path)
+      params:
+        - name: SNAPSHOT
+          value: $(params.SNAPSHOT)  
+    - name: get-content
+      taskSpec:
+        params:
+          - name: image-name
+            type: string
+        results:
+          - name: orasAddress
+        steps:
+          - name: check-folder
+            image: $(params.image-name)
+            script: |
+              #!/bin/sh
+              ls /opt
+              roasAddress=$(sed -n '2p' /opt/release-info)
+              echo -n $roasAddress | tee $(results.orasAddress.path)
+      params:
+        - name: image-name
+          value: $(tasks.init.results.output-image)
+    - name: provision-fedora
+      taskRef: 
+        resolver: git
+        params:
+          - name: url
+            value: https://github.com/redhat-developer/mapt
+          - name: revision
+            value: v0.9.0
+          - name: pathInRepo
+            value: tkn/infra-aws-fedora.yaml
+      params:
+        - name: secret-aws-credentials
+          value: aws-crcqe-bot
+        - name: id
+          value: $(tasks.init.results.correlation)
+        - name: operation
+          value: create
+        - name: ownerKind
+          value: 'PipelineRun'
+        - name: ownerName
+          value: $(context.pipelineRun.name)
+        - name: ownerUid
+          value: $(context.pipelineRun.uid)
+        - name: nested-virt
+          value: 'true'
+        - name: version
+          value: $(params.version)
+        - name: tags
+          value: 'cicd=konflux,pipelinerun=$(context.pipelineRun.name)'
+    - name: install-crc
+      taskRef:
+        resolver: git
+        params:
+          - name: url
+            value: https://github.com/crc-org/ci-definitions
+          - name: revision
+            value: main
+          - name: pathInRepo
+            value: crc-support/tkn/task.yaml
+      params:
+        - name: os
+          value: linux
+        - name: secret-host
+          value: $(tasks.provision-fedora.results.host-access-secret)
+        - name: asset-base-url
+          value: "test"
+        - name: asset-oras-address
+          value: $(tasks.get-content.results.orasAddress)
+        - name: asset-name
+          value: "crc-linux-amd64.tar.xz"
+        - name: install
+          value: "true"
+        - name: force-fresh
+          value: "false"
+  finally:
+    - name: decommission-fedora
+      taskRef:
+        resolver: git
+        params:
+          - name: url
+            value: https://github.com/redhat-developer/mapt
+          - name: revision
+            value: v0.9.0
+          - name: pathInRepo
+            value: tkn/infra-aws-fedora.yaml
+      params:
+        - name: secret-aws-credentials
+          value: aws-crcqe-bot
+        - name: id
+          value: $(tasks.init.results.correlation)
+        - name: operation
+          value: destroy
+        - name: ownerKind
+          value: 'PipelineRun'
+        - name: ownerName
+          value: $(context.pipelineRun.name)
+        - name: ownerUid
+          value: $(context.pipelineRun.uid)
