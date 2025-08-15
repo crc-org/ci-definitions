@@ -1,0 +1,94 @@
+---
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: opensearch-upload
+  labels:
+    app.kubernetes.io/version: "v1.0.0"
+  annotations:
+    tekton.dev/pipelines.minVersion: "0.24.x"
+    tekton.dev/categories: data
+    tekton.dev/tags: "data, results"
+    tekton.dev/displayName: "opensearch import"
+    tekton.dev/platforms: "linux/amd64"
+spec:
+  description: |
+    Task to import test metrics into OpenSearch
+  
+  params:
+  - name: secret-opensearch
+    description: |
+      opensearch secret holding the opensearch credentials. Secret should be accessible to this task.
+
+      ---
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: XXX
+      type: Opaque
+      data:
+        username: XXXX
+        url: XXXX
+        password: XXXX
+    default: opensearch
+  - name: pvc
+    description: The persistentVolumeClaim name that contains the xml file to be imported to reportportal
+    default: pipelines-data
+  - name: results-id
+    description: Identifier for the results. Typically will include metadata about the environment or the product
+  - name: results-wsstorage-path
+    description: path within the storage workspace for the results file to be uploaded
+  - name: attributes
+    description: json format of test attributes
+  # Control
+  - name: debug
+    description: debug the task cmds
+    default: 'false' 
+
+
+  steps:
+  - name: import
+    image: quay.io/crc-org/opensearch:v0.0.1 
+    imagePullPolicy: Always
+    volumeMounts:
+      - name: opensearch
+        mountPath: /opt/opensearch
+      - name: storage
+        mountPath: /opt/storage
+    script: |
+      #!/bin/sh
+      set -e
+
+      export user=$(cat /opt/opensearch/username)
+      export password=$(cat /opt/opensearch/password)
+      export url=$(cat /opt/opensearch/url)
+
+      # If debug add verbosity
+      if [[ "$(params.debug)" == "true" ]]; then
+        set -xuo pipefail
+      fi
+
+      attributesLine=$(params.attributes)
+      attributes=$(echo "$attributesLine" | tr -d '\n')     
+      python3 /opt/opensearch-upload.py --path /opt/storage/$(params.results-wsstorage-path) \
+       --attributes  $attributes --category $(params.results-id) 
+
+    resources:      
+      requests:
+        memory: "100Mi"
+        cpu: "50m"
+      limits:
+        memory: "200Mi"
+        cpu: "100m"
+
+
+  volumes:
+    - name: storage
+      description: storage volume where to find the results to be imported
+      persistentVolumeClaim:
+        claimName: $(params.pvc)
+    - name: opensearch
+      secret:
+        secretName: $(params.secret-opensearch)
+    
+    

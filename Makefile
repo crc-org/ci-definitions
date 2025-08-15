@@ -204,3 +204,19 @@ reportportal-oci-push:
 reportportal-tkn-create:
 	$(call tkn_template,$(REPORTPORTAL),$(REPORTPORTAL_V),reportportal,import)
 
+OPENSEARCH_IMAGE ?= $(shell sed -n 1p open-search/release-info)
+OPENSEARCH_VERSION ?= v$(shell sed -n 2p open-search/release-info)
+OPENSEARCH_SAVE ?= opensearch
+
+opensearch-oci-build: CONTEXT=open-search/oci
+opensearch-oci-build: MANIFEST=$(OPENSEARCH_IMAGE):$(OPENSEARCH_VERSION)
+opensearch-oci-build:
+	${CONTAINER_MANAGER} build -t $(MANIFEST) -f $(CONTEXT)/Containerfile $(CONTEXT)
+
+opensearch-oci-save: MANIFEST=$(OPENSEARCH_IMAGE):$(OPENSEARCH_VERSION)
+opensearch-oci-save:
+	${CONTAINER_MANAGER} save -o $(OPENSEARCH_SAVE).tar $(MANIFEST)
+
+opensearch-oci-push: MANIFEST=$(OPENSEARCH_IMAGE):$(OPENSEARCH_VERSION)
+opensearch-oci-push:
+	${CONTAINER_MANAGER} push $(MANIFEST)

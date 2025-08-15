@@ -1,0 +1,69 @@
+name: opensearch-builder
+
+on:
+  push:
+    branches: [ main ]
+    paths: ['Makefile', 'open-search/**', '.github\/workflows\/opensearch*' ]  
+  pull_request:
+    branches: [ main ]
+    paths: ['Makefile', 'open-search/**', '.github\/workflows\/opensearch*' ]  
+      
+jobs:
+  build:
+    name: build
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build image for PR
+        if: ${{ github.event_name == 'pull_request' }}
+        env:
+          CRC_BUILDER: ghcr.io/crc-org/ci-opensearch
+          CRC_BUILDER_V: pr-${{ github.event.number }}
+        run: |
+          make opensearch-oci-build
+          make opensearch-oci-save
+          echo "image=${CRC_BUILDER}:${CRC_BUILDER_V}" >> "$GITHUB_ENV"
+  
+      - name: Build image for Release
+        if: ${{ github.event_name == 'push' }}
+        run: |
+          make opensearch-oci-build
+          make opensearch-oci-save
+          echo "image=$(sed -n 1p open-search/release-info):v$(sed -n 2p open-search/release-info)" >> "$GITHUB_ENV"
+
+      - name: Create image metadata
+        run: |
+          echo ${{ env.image }} > opensearch-image
+          echo ${{ github.event_name }} > opensearch-build-event
+  
+      - name: Upload opensearch
+        uses: actions/upload-artifact@v4
+        with:
+          name: opensearch
+          path: opensearch*
+
+  tkn-check:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create k8s Kind Cluster
+        uses: helm/kind-action@v1
+    
+        # https://docs.openshift.com/pipelines/1.15/about/op-release-notes.html
+      - name: Deploy min supported tekton version
+        run: kubectl apply -f https://storage.googleapis.com/tekton-releases/pipeline/previous/v0.44.5/release.yaml
+    
+      - name: Deploy tasks
+        run: |
+          kubectl apply -f open-search/upload.yaml
+
+
+
+
+
+
+     
