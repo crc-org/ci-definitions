@@ -524,6 +524,28 @@ spec:
           value: $(params.s3-bucket)
         - name: s3-path
           value: $(params.s3-path)
+    - name: opensearch-upload
+      runAfter:
+        - s3-upload-results
+      taskRef:
+        resolver: git
+        params:
+          - name: url
+            value: https://github.com/crc-org/ci-definitions
+          - name: revision
+            value: main
+          - name: pathInRepo
+            value: open-search/upload.yaml
+      params:
+        - name: index
+          value: 'crc-test'
+        - name: results-id
+          value: $(tasks.init.results.bundle-preset)-$(tasks.init.results.os)-$(tasks.init.results.arch)
+        - name: results-wsstorage-path
+          value: $(tasks.init.results.correlation)/$(params.qe-worspace-subpath)
+        - name: attributes
+          value: |
+           "[{"crc-version":"$(tasks.init.results.date)","bundle-version":"$(tasks.init.results.bundle-version)","preset":"$(tasks.init.results.bundle-preset)","type":"$(params.test-catalog)"}]"
 
   finally:
     - name: reportportal-import
@@ -549,7 +571,7 @@ spec:
           value: $(params.debug)
         - name: launch-attributes
           value: |
-           {"attributes":[{"key":"crc-version","value":"$(tasks.init.results.date)"},{"key":"bundle-version","value":"$(tasks.init.results.bundle-version)"},{"key":"preset","value":"$(tasks.init.results.bundle-preset)"},{"key": "skippedIssue", "value": true}]}
+           "{"attributes":[{"key":"crc-version","value":"$(tasks.init.results.date)"},{"key":"bundle-version","value":"$(tasks.init.results.bundle-version)"},{"key":"preset","value":"$(tasks.init.results.bundle-preset)"},{"key": "skippedIssue", "value": true}]}"
         - name: launch-description
           value: $(params.test-catalog)
         - name: upload-log
