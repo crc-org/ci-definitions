@@ -95,7 +95,7 @@ spec:
 
   steps:
     - name: provisioner
-      image: quay.io/redhat-developer/mapt:v0.7.4
+      image: quay.io/redhat-developer/mapt:v0.9.6
       volumeMounts:
         - name: az-credentials
           mountPath: /opt/credentials
@@ -125,7 +125,7 @@ spec:
         cmd="mapt azure fedora create --project-name fedora "
         cmd+="--backed-url file://${workspace_path} "
         cmd+="--conn-details-output ${workspace_path} "
-        cmd+="--arch arm64 --cpus $(params.builder-cpus) --memory $(params.builder-memory) --spot "
+        cmd+="--arch arm64 --cpus $(params.builder-cpus) --memory $(params.builder-memory) --spot --spot-eviction-tolerance low "
         eval "${cmd}"
         if [[ $? -ne 0 ]]; then 
           exit 1
@@ -207,7 +207,7 @@ spec:
           cpu: 250m
       timeout: 900m
     - name: decommission
-      image: quay.io/redhat-developer/mapt:v0.7.4
+      image: quay.io/redhat-developer/mapt:v0.9.6
       volumeMounts:
         - name: az-credentials
           mountPath: /opt/credentials
