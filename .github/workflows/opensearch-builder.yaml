@@ -19,12 +19,12 @@ jobs:
       - name: Build image for PR
         if: ${{ github.event_name == 'pull_request' }}
         env:
-          CRC_BUILDER: ghcr.io/crc-org/ci-opensearch
-          CRC_BUILDER_V: pr-${{ github.event.number }}
+          OPENSEARCH_IMAGE: ghcr.io/crc-org/ci-opensearch
+          OPENSEARCH_VERSION: pr-${{ github.event.number }}
         run: |
           make opensearch-oci-build
           make opensearch-oci-save
-          echo "image=${CRC_BUILDER}:${CRC_BUILDER_V}" >> "$GITHUB_ENV"
+          echo "image=${OPENSEARCH_IMAGE}:${OPENSEARCH_VERSION}" >> "$GITHUB_ENV"
   
       - name: Build image for Release
         if: ${{ github.event_name == 'push' }}
