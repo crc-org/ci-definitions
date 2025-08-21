@@ -31,6 +31,9 @@ spec:
         url: XXXX
         password: XXXX
     default: opensearch
+  - name: index
+    description: the index of opensearch database
+    default: crc-test
   - name: pvc
     description: The persistentVolumeClaim name that contains the xml file to be imported to reportportal
     default: pipelines-data
@@ -71,7 +74,7 @@ spec:
       attributesLine=$(params.attributes)
       attributes=$(echo "$attributesLine" | tr -d '\n')     
       python3 /opt/opensearch-upload.py --path /opt/storage/$(params.results-wsstorage-path) \
-       --attributes  $attributes --category $(params.results-id) 
+       --attributes  $attributes --category $(params.results-id) --index $(params.index)
 
     resources:      
       requests:
