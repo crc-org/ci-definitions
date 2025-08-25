@@ -168,7 +168,7 @@ spec:
           - name: url
             value: https://github.com/redhat-developer/mapt.git
           - name: revision
-            value: main
+            value: v0.9.7
           - name: pathInRepo
             value: tkn/infra-aws-fedora.yaml
       params:
@@ -190,6 +190,8 @@ spec:
           value: arm64
         - name: nested-virt
           value: 'true'
+        - name: spot-increase-rate
+          value: '30'
         - name: tags
           value: "pipelinerunName=$(context.pipelineRun.name)"
         - name: spot-increase-rate
@@ -386,6 +388,28 @@ spec:
           value: $(params.s3-bucket)
         - name: s3-path
           value: $(params.s3-path)
+    - name: opensearch-upload
+      runAfter:
+        - s3-upload-results
+      taskRef:
+        resolver: git
+        params:
+          - name: url
+            value: https://github.com/crc-org/ci-definitions
+          - name: revision
+            value: main
+          - name: pathInRepo
+            value: open-search/upload.yaml
+      params:
+        - name: index
+          value: 'crc-test'
+        - name: results-id
+          value: $(tasks.init.results.bundle-preset)-linux-arm64
+        - name: results-wsstorage-path
+          value: $(tasks.init.results.correlation)/$(params.qe-worspace-subpath)
+        - name: attributes
+          value: |
+           "[{"crc-version":"$(tasks.init.results.date)","bundle-version":"$(tasks.init.results.bundle-version)","preset":"$(tasks.init.results.bundle-preset)","type":"$(params.test-catalog)"}]"
   finally:
     - name: decommission-tester
       when:
@@ -398,7 +422,7 @@ spec:
           - name: url
             value: https://github.com/redhat-developer/mapt.git
           - name: revision
-            value: main
+            value: v0.9.7
           - name: pathInRepo
             value: tkn/infra-aws-fedora.yaml
       params:
