@@ -3,6 +3,7 @@ import argparse
 import requests
 from datetime import datetime, timezone
 import os
+import sys
 
 parser = argparse.ArgumentParser(description="upload performace test data to opensearch")
 parser.add_argument("--index", help="opensearch index name", default="crc-test")
@@ -17,7 +18,8 @@ if not folder_path or not os.path.isdir(folder_path):
     raise SystemExit(f"Invalid --path: {folder_path!r}")
 txt_files = [f for f in os.listdir(folder_path) if f.endswith(".txt")]
 if len(txt_files) == 0:
-    raise SystemExit(f"No txt file in: {folder_path!r}")
+    print("No txt file in {}".format(folder_path))
+    sys.exit(0)
 
 all={}
 for file_name in txt_files:
