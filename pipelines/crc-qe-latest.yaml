@@ -571,7 +571,7 @@ spec:
           value: $(params.debug)
         - name: launch-attributes
           value: |
-           "{"attributes":[{"key":"crc-version","value":"$(tasks.init.results.date)"},{"key":"bundle-version","value":"$(tasks.init.results.bundle-version)"},{"key":"preset","value":"$(tasks.init.results.bundle-preset)"},{"key": "skippedIssue", "value": true}]}"
+           {"attributes":[{"key":"crc-version","value":"$(tasks.init.results.date)"},{"key":"bundle-version","value":"$(tasks.init.results.bundle-version)"},{"key":"preset","value":"$(tasks.init.results.bundle-preset)"},{"key": "skippedIssue", "value": true}]}
         - name: launch-description
           value: $(params.test-catalog)
         - name: upload-log
