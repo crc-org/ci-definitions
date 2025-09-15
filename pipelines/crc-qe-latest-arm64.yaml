@@ -405,9 +405,11 @@ spec:
           value: $(tasks.init.results.bundle-preset)-linux-arm64
         - name: results-wsstorage-path
           value: $(tasks.init.results.correlation)/$(params.qe-worspace-subpath)
-        - name: attributes
-          value: |
-           "[{"crc-version":"$(tasks.init.results.date)","bundle-version":"$(tasks.init.results.bundle-version)","preset":"$(tasks.init.results.bundle-preset)","type":"$(params.test-catalog)"}]"
+        - name: bundle
+          value: "$(tasks.init.results.bundle-version)"
+        - name: crc
+          value: "$(tasks.init.results.date)"
+        
   finally:
     - name: decommission-tester
       when:

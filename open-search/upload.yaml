@@ -41,8 +41,10 @@ spec:
     description: Identifier for the results. Typically will include metadata about the environment or the product
   - name: results-wsstorage-path
     description: path within the storage workspace for the results file to be uploaded
-  - name: attributes
-    description: json format of test attributes
+  - name: crc
+    description: crc version
+  - name: bundle
+    description: bundle version
   # Control
   - name: debug
     description: debug the task cmds
@@ -70,11 +72,10 @@ spec:
       if [[ "$(params.debug)" == "true" ]]; then
         set -xuo pipefail
       fi
-
-      attributesLine=$(params.attributes)
-      attributes=$(echo "$attributesLine" | tr -d '\n')     
+  
       python3 /opt/opensearch-upload.py --path /opt/storage/$(params.results-wsstorage-path) \
-       --attributes  $attributes --category $(params.results-id) --index $(params.index)
+      --category $(params.results-id) --index $(params.index) \
+      --bundle $(params.bundle) --crc $(params.crc)
 
     resources:      
       requests:

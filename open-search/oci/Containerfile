@@ -6,4 +6,4 @@ RUN microdnf install -y openssh-clients sshpass zip bash jq findutils python3 pi
     && pip install --no-cache-dir requests \
     && microdnf clean all
 
-COPY opensearch-upload.py /opt/
+COPY opensearch-upload.py analyzedata.py /opt/

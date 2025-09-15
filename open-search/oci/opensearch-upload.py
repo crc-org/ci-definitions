@@ -4,12 +4,15 @@ import requests
 from datetime import datetime, timezone
 import os
 import sys
+import analyzedata
 
 parser = argparse.ArgumentParser(description="upload performace test data to opensearch")
 parser.add_argument("--index", help="opensearch index name", default="crc-test")
-parser.add_argument("--attributes", help="test attributes")
 parser.add_argument("--category", help="category of the performace data")
 parser.add_argument("--path", help="the folder that contains the txt performace data")
+parser.add_argument("--crc", help="the folder that contains the txt performace data")
+parser.add_argument("--bundle", help="the folder that contains the txt performace data")
+
 
 args = parser.parse_args()
 
@@ -24,23 +27,31 @@ if len(txt_files) == 0:
 all={}
 for file_name in txt_files:
     file_path = os.path.join(folder_path, file_name)
-    result = {}
-    with open(file_path, "r", encoding="utf-8") as f:
-        for line in f:
-            if ":" in line:
-                key, value = line.strip().split(":", 1)
-                value = value.strip()
-                result[key] = value
-    title=file_name.strip().split(".", 1)[0]
-    all[title]=result
+    if "time" in file_name:
+        start, stop = analyzedata.analyze_time_file(file_path)
+        all["time-start"] = start
+        all["time-stop"] = stop
+    elif "cpu" in file_name:
+        start, deployment, stop = analyzedata.analyze_cpu_file(file_path)
+        all["cpu-start"] = start
+        all["cpu-deployment"] = deployment
+        all["cpu-stop"] = stop
+    elif "memory" in file_name:
+        start, deployment, stop = analyzedata.analyze_memory_file(file_path)
+        all["memory-start"] = start
+        all["memory-deployment"] = deployment
+        all["memory-stop"] = stop
+    else:
+        print("{} not a performace txt file".format(file_name))
 
 custom_timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 all["timestamp"]=custom_timestamp
 all["category"] = args.category
-all["attributes"] = args.attributes
+all["crc"] = args.crc
+all["bundle"] = args.bundle
 
-json_str = json.dumps(all, indent=2)
-#print(json_str)
+#print(all)
+#json_str = json.dumps(all, indent=2)
 
 OPENSEARCH_URL = os.environ["url"]
 USERNAME = os.environ["user"]
