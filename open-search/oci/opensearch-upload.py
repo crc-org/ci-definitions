@@ -33,14 +33,16 @@ for file_name in txt_files:
         all["time-stop"] = stop
     elif "cpu" in file_name:
         start, deployment, stop = analyzedata.analyze_cpu_file(file_path)
-        all["cpu-start"] = start
-        all["cpu-deployment"] = deployment
-        all["cpu-stop"] = stop
+        if start != None:
+            all["cpu-start"] = start
+            all["cpu-deployment"] = deployment
+            all["cpu-stop"] = stop
     elif "memory" in file_name:
         start, deployment, stop = analyzedata.analyze_memory_file(file_path)
-        all["memory-start"] = start
-        all["memory-deployment"] = deployment
-        all["memory-stop"] = stop
+        if start != None:
+            all["memory-start"] = start
+            all["memory-deployment"] = deployment
+            all["memory-stop"] = stop
     else:
         print("{} not a performace txt file".format(file_name))
 

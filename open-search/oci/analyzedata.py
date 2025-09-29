@@ -48,6 +48,9 @@ def analyze_cpu_file(file_path):
                 key, value, other = temp.strip().split("|")
                 cpu = float(value)
                 cpu_list.append(cpu)
+    if len(cpu_list) < 4:
+        print(f"Expected >=4 CPU samples in {file_path}, got {len(cpu_list)}")
+        return None, None, None
     start = cpu_list[1] - cpu_list[0]
     deployment = cpu_list[2] - cpu_list[0]
     stop = cpu_list[3] - cpu_list[0]
@@ -63,6 +66,9 @@ def analyze_memory_file(file_path):
                 parts = line.strip().split(" ")
                 memory = int(parts[5])
                 memory_list.append(memory)
+    if len(memory_list) < 4:
+        print(f"Expected >=4 memory samples in {file_path}, got {len(memory_list)}")
+        return None, None, None
     start = memory_list[0] - memory_list[1]
     deployment = memory_list[0] - memory_list[2]
     stop = memory_list[0] - memory_list[3]
