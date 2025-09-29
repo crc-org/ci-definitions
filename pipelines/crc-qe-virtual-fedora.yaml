@@ -53,7 +53,7 @@ spec:
           - name: url
             value: https://github.com/redhat-developer/mapt
           - name: revision
-            value: main
+            value: v0.9.7
           - name: pathInRepo
             value: tkn/infra-aws-fedora.yaml
       params:
@@ -185,7 +185,7 @@ spec:
           - name: url
             value: https://github.com/redhat-developer/mapt
           - name: revision
-            value: main
+            value: v0.9.7
           - name: pathInRepo
             value: tkn/infra-aws-fedora.yaml
       params:
