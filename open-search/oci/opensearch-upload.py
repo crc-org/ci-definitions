@@ -25,26 +25,35 @@ if len(txt_files) == 0:
     sys.exit(0)
 
 all={}
+count=0
 for file_name in txt_files:
     file_path = os.path.join(folder_path, file_name)
     if "time" in file_name:
         start, stop = analyzedata.analyze_time_file(file_path)
-        all["time-start"] = start
-        all["time-stop"] = stop
+        if start is not None and stop is not None:
+            all["time-start"] = start
+            all["time-stop"] = stop
+            count=count+1
     elif "cpu" in file_name:
         start, deployment, stop = analyzedata.analyze_cpu_file(file_path)
-        if start != None:
+        if start is not None:
             all["cpu-start"] = start
             all["cpu-deployment"] = deployment
             all["cpu-stop"] = stop
+            count=count+1
     elif "memory" in file_name:
         start, deployment, stop = analyzedata.analyze_memory_file(file_path)
-        if start != None:
+        if start is not None:
             all["memory-start"] = start
             all["memory-deployment"] = deployment
             all["memory-stop"] = stop
+            count=count+1
     else:
         print("{} not a performace txt file".format(file_name))
+
+if count == 0:
+    print("All performance files do not have enough data")
+    sys.exit(0)
 
 custom_timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 all["timestamp"]=custom_timestamp

@@ -15,7 +15,15 @@ def analyze_time_file(file_path):
                     start_list.append(covert_to_seconds(value))
                 else:
                     stop_list.append(covert_to_seconds(value))
-    return average(start_list), average(stop_list)
+    if len(start_list) > 0:
+        start = average(start_list)
+    else:
+        start = None
+    if len(stop_list) > 0:
+        stop = average(stop_list)
+    else:
+        stop = None
+    return start, stop
 
 
 def covert_to_seconds(time_str: str) -> int:
