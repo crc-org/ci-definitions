@@ -15,7 +15,7 @@ metadata:
     tekton.dev/platforms: "linux/amd64"
 spec:
   description: >-
-    This pipeline will run the testing for openshift local on 
+    This pipeline will run the testing for openshift local on
     a specific linux version based on nested virtualization
 
   workspaces:
@@ -25,7 +25,7 @@ spec:
     # optional: true
     description: |
       This secret will hold the credentials to the target cloud provider it could match depending on the target:
-      
+
       ## AWS
       ocp secret holding the aws credentials. Secret should be accessible to this task.
 
@@ -106,13 +106,13 @@ spec:
     # Windows related params
     - name: windows-featurepack
       description: windows feature pack (default "22h2-pro")
-      # default: 22h2-pro 
+      # default: 22h2-pro
       default: "''"
     - name: windows-version
       description: Major version for windows desktop 10 or 11 (default "11")
       # default: '11'
       default: "''"
-  
+
     # Fedora related params
     - name: fedora-version
       description: Fedora Cloud version (i.e 39, 38, 37...)
@@ -125,16 +125,16 @@ spec:
     - name: rhel-arch
       description: architecture for the target machine. Allowed x86_64 or arm64 (default "x86_64")
       default: 'x86_64'
-    
+
     # CRC params
     - name: internal-base-url
       description: in case of an internal release we can not directly download it but upload fisrt to s3. This setup the base url for the assets to be uploaded
       default: "''"
     - name: internal-asset-name
-      description: asset name to be uploaded 
+      description: asset name to be uploaded
       default: "''"
     - name: internal-shasum-name
-      description: shasum name to be uploaded 
+      description: shasum name to be uploaded
       default: "''"
     - name: internal-shasum-target-name
       description: setup the name for the internal shasum on s3
@@ -151,8 +151,8 @@ spec:
       description: type of arch (amd64, arm64). Defaults amd64. This should be align with rhel-arch param
       default: amd64
     - name: e2e-tag
-      description: tags to select e2e scnearios. Default empty values which means all scnearios  
-      default: "''"  
+      description: tags to select e2e scnearios. Default empty values which means all scnearios
+      default: "''"
     - name: qe-worspace-subpath
       description: subpath on workspace where storing ephemeral qe results
       default: qe-results
@@ -173,7 +173,7 @@ spec:
 
     # Pipeline control params
     - name: debug
-      description: control verbosity and keep instances after run for troubleshooting. 
+      description: control verbosity and keep instances after run for troubleshooting.
       default: 'false'
     - name: target-cleanup
       description: cleanup target ephemeral target folders on each step which requires them
@@ -181,7 +181,7 @@ spec:
     - name: test-catalog
       description: Used for reportportal launch description
       default: 'release-test'
-  
+
   results:
     - name: e2e-results-url
       description: url to access e2e junit results
@@ -202,9 +202,9 @@ spec:
     - correlate
     params:
     - name: fedora-version
-      value: $(params.fedora-version) 
+      value: $(params.fedora-version)
     - name: rhel-version
-      value: $(params.rhel-version) 
+      value: $(params.rhel-version)
     - name: windows-version
       value: $(params.windows-version)$(params.windows-featurepack)
     taskSpec:
@@ -243,17 +243,17 @@ spec:
       name: gather-s3-info
     params:
     - name: s3-data-secret
-      value: $(params.s3-data-secret) 
+      value: $(params.s3-data-secret)
     - name: bucket
-      value: $(params.s3-bucket) 
+      value: $(params.s3-bucket)
     - name: folder-path
       value: $(params.s3-folder-path)/$(tasks.host-info.results.id)
   - name: internal-asset-upload
-    when: 
-    - input: $(params.internal-base-url)  
+    when:
+    - input: $(params.internal-base-url)
       operator: notin
       values: ["''"]
-    - input: $(params.internal-asset-name)  
+    - input: $(params.internal-asset-name)
       operator: notin
       values: ["''"]
     runAfter:
@@ -275,11 +275,11 @@ spec:
       value: $(params.internal-asset-name)
     timeout: "15m"
   - name: internal-shasum-upload
-    when: 
-    - input: $(params.internal-base-url)  
+    when:
+    - input: $(params.internal-base-url)
       operator: notin
       values: ["''"]
-    - input: $(params.internal-shasum-name)  
+    - input: $(params.internal-shasum-name)
       operator: notin
       values: ["''"]
     runAfter:
@@ -311,7 +311,7 @@ spec:
     - name: public-base-url
       value: $(tasks.s3-info.results.download-url)
     - name: external-base-url
-      value: $(params.downloadable-url)  
+      value: $(params.downloadable-url)
   - name: crc-info
     runAfter:
     - host-info
@@ -333,8 +333,8 @@ spec:
           value: v0.8.0
         - name: pathInRepo
           value: tkn/infra-aws-fedora.yaml
-    when: 
-    - input: $(params.fedora-version)  
+    when:
+    - input: $(params.fedora-version)
       operator: notin
       values: ["''"]
     params:
@@ -355,16 +355,16 @@ spec:
     - name: nested-virt
       value: 'true'
     - name: version
-      value: $(params.fedora-version)  
+      value: $(params.fedora-version)
     - name: tags
       value: "pipelinerunName=$(context.pipelineRun.name)"
-    timeout: "20m" 
+    timeout: "20m"
   - name: provision-rhel
     runAfter:
     - s3-info
     - crc-info
-    when: 
-    - input: $(params.rhel-version)  
+    when:
+    - input: $(params.rhel-version)
       operator: notin
       values: ["''"]
     taskRef:
@@ -398,19 +398,19 @@ spec:
     - name: arch
       value: $(params.rhel-arch)
     - name: version
-      value: $(params.rhel-version) 
+      value: $(params.rhel-version)
     - name: tags
       value: "pipelinerunName=$(context.pipelineRun.name)"
-    timeout: "20m" 
+    timeout: "20m"
   - name: provision-windows
     runAfter:
     - s3-info
     - crc-info
-    when: 
-    - input: $(params.windows-featurepack)  
+    when:
+    - input: $(params.windows-featurepack)
       operator: notin
       values: ["''"]
-    - input: $(params.windows-version)  
+    - input: $(params.windows-version)
       operator: notin
       values: ["''"]
     taskRef:
@@ -440,12 +440,12 @@ spec:
     - name: nested-virt
       value: 'true'
     - name: windows-featurepack
-      value: $(params.windows-featurepack) 
+      value: $(params.windows-featurepack)
     - name: windows-version
-      value: $(params.windows-version) 
+      value: $(params.windows-version)
     - name: tags
       value: "pipelinerunName=$(context.pipelineRun.name)"
-    timeout: "20m" 
+    timeout: "20m"
   - name: sync-provision
     runAfter:
     - provision-fedora
@@ -476,39 +476,39 @@ spec:
             - name: storage
               mountPath: /opt/storage
           script: |
-            #!/bin/sh 
+            #!/bin/sh
 
             set -exuo pipefail
 
             HOST_FILENAME=host
             USERNAME_FILENAME=username
             KEY_FILENAME=id_rsa
-            
+
             workspace_path="/opt/host-secret"
 
             # Check files
             while [ ! -f "${workspace_path}/${HOST_FILENAME}" ]; do sleep 1; done
             while [ ! -f "${workspace_path}/${USERNAME_FILENAME}" ]; do sleep 1; done
             while [ ! -f "${workspace_path}/${KEY_FILENAME}" ]; do sleep 1; done
-            
+
             # Set results
-            cat "${workspace_path}/${HOST_FILENAME}" | tee $(results.host.path)   
-            cat "${workspace_path}/${USERNAME_FILENAME}" | tee $(results.username.path)   
+            cat "${workspace_path}/${HOST_FILENAME}" | tee $(results.host.path)
+            cat "${workspace_path}/${USERNAME_FILENAME}" | tee $(results.username.path)
             cp "${workspace_path}/${KEY_FILENAME}" /opt/storage/$(params.workspace-resources-path)
-            echo -n "${KEY_FILENAME}" | tee $(results.key-filename.path)  
+            echo -n "${KEY_FILENAME}" | tee $(results.key-filename.path)
     params:
     - name: secret-host
       value: host-info-$(tasks.correlate.results.correlation)
     - name: workspace-resources-path
       value: $(tasks.correlate.results.correlation)
-    timeout: "20m" 
+    timeout: "20m"
   - name: install
     runAfter:
     - sync-provision
     - internal-asset-upload
     - internal-shasum-upload
     taskRef:
-      resolver: bundles 
+      resolver: bundles
       params:
       - name: bundle
         value: quay.io/rhqp/crc-support-tkn:v0.5
@@ -527,21 +527,21 @@ spec:
       value: $(tasks.sync-provision.results.key-filename)
     - name: workspace-resources-path
       value: $(tasks.correlate.results.workspace-resources-path)
-    # Preparing crc version is only used for target path storage  
+    # Preparing crc version is only used for target path storage
     - name: downloadable-version
-      value: $(tasks.crc-info.results.crc-version)    
+      value: $(tasks.crc-info.results.crc-version)
     - name: downloadable-url
-    # Only accessible url within downloadable-url or internal uploaded composed url  
+    # Only accessible url within downloadable-url or internal uploaded composed url
       value: $(tasks.url-picker.results.base-url)
     - name: shasum-file
-      value: $(params.shasum-file)  
+      value: $(params.shasum-file)
     workspaces:
     - name: pipelines-data
       workspace: pipelines-data
-    timeout: "1h"  
+    timeout: "1h"
   - name: qe
     taskRef:
-      resolver: bundles 
+      resolver: bundles
       params:
       - name: bundle
         value: quay.io/rhqp/crc-e2e-tkn:v1.0.0
@@ -555,7 +555,7 @@ spec:
     - name: os
       value: $(tasks.host-info.results.os)
     - name: arch
-      value: $(params.qe-arch) 
+      value: $(params.qe-arch)
     - name: host
       value: $(tasks.sync-provision.results.host)
     - name: username
@@ -565,28 +565,28 @@ spec:
     - name: workspace-resources-path
       value: $(tasks.correlate.results.workspace-resources-path)
     - name: worspace-qe-subpath
-      value: $(params.qe-worspace-subpath) 
+      value: $(params.qe-worspace-subpath)
     - name: crc-version
       value: $(tasks.crc-info.results.crc-version)
     - name: run-e2e
-      value: $(params.run-e2e) 
+      value: $(params.run-e2e)
     - name: e2e-tag
-      value: $(params.e2e-tag) 
+      value: $(params.e2e-tag)
     - name: e2e-cleanup-target
-      value: $(params.target-cleanup) 
+      value: $(params.target-cleanup)
     - name: run-integration
-      value: $(params.run-integration) 
+      value: $(params.run-integration)
     - name: integration-cleanup-target
-      value: $(params.target-cleanup) 
+      value: $(params.target-cleanup)
     - name: debug
-      value: $(params.debug) 
+      value: $(params.debug)
     workspaces:
     - name: pipelines-data
       workspace: pipelines-data
     - name: ocp-pullsecret
       workspace: ocp-pullsecret
     timeout: "5h"
-  
+
   - name: datalake-sink
     runAfter:
     - qe
@@ -604,8 +604,8 @@ spec:
     - name: workspace-path
       value: $(tasks.correlate.results.workspace-resources-path)
     - name: workspace-subpath
-      value: $(params.qe-worspace-subpath) 
-    # Do not delete to keep tf state to decomission on final 
+      value: $(params.qe-worspace-subpath)
+    # Do not delete to keep tf state to decomission on final
     # This task should be splitted to allow only cleaning up
     - name: workspace-cleanup
       value: 'false'
@@ -639,8 +639,8 @@ spec:
       value: e2e-junit.xml
   finally:
   - name: debug-info
-    when: 
-    - input: $(params.rhel-version)  
+    when:
+    - input: $(params.rhel-version)
       operator: notin
       values: ["''"]
     - input: $(params.debug)
@@ -671,8 +671,8 @@ spec:
     - name: pipelines-data
       workspace: pipelines-data
   - name: decomission-fedora
-    when: 
-    - input: $(params.fedora-version)  
+    when:
+    - input: $(params.fedora-version)
       operator: notin
       values: ["''"]
     taskRef:
@@ -697,10 +697,10 @@ spec:
       value: $(context.pipelineRun.name)
     - name: ownerUid
       value: $(context.pipelineRun.uid)
-    timeout: "40m"  
+    timeout: "40m"
   - name: decomission-rhel
-    when: 
-    - input: $(params.rhel-version)  
+    when:
+    - input: $(params.rhel-version)
       operator: notin
       values: ["''"]
     - input: $(params.debug)
@@ -730,13 +730,13 @@ spec:
       value: $(context.pipelineRun.name)
     - name: ownerUid
       value: $(context.pipelineRun.uid)
-    timeout: "40m"  
+    timeout: "40m"
   - name: decomission-windows
-    when: 
-    - input: $(params.windows-featurepack)  
+    when:
+    - input: $(params.windows-featurepack)
       operator: notin
       values: ["''"]
-    - input: $(params.windows-version)  
+    - input: $(params.windows-version)
       operator: notin
       values: ["''"]
     taskRef:
@@ -761,7 +761,7 @@ spec:
       value: $(context.pipelineRun.name)
     - name: ownerUid
       value: $(context.pipelineRun.uid)
-    timeout: "40m"  
+    timeout: "40m"
   - name: reportportal-import
     taskRef:
       resolver: git
@@ -786,10 +786,10 @@ spec:
       - name: launch-description
         value: $(params.test-catalog)
       - name: pipelinerunName
-        value: $(context.pipelineRun.name) 
+        value: $(context.pipelineRun.name)
       - name: secret-reportportal
         value: reportportal-crc
       - name: pvc
         value: pipelines-data
-    timeout: "15m"  
-    
+    timeout: "15m"
+
