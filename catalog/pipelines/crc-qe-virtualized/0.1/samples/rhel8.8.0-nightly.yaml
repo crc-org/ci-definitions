@@ -1,0 +1,28 @@
+---
+apiVersion: tekton.dev/v1beta1
+kind: PipelineRun
+metadata:
+  generateName: crc-qe-virtualized-rhel880-
+spec:
+  pipelineRef:
+    name: crc-qe-virtualized
+  params:
+  - name: rhel-version
+    value: RHEL-8.8.0-x86_64-nightly-latest
+  - name: repo-baseos-url
+    value: 'http://download.eng.bos.redhat.com/rhel-8/nightly/RHEL-8/RHEL-8.8.0-20230127.0/compose/BaseOS/x86_64/os'
+  - name: repo-appstream-url
+    value: 'http://download.eng.bos.redhat.com/rhel-8/nightly/RHEL-8/RHEL-8.8.0-20230127.0/compose/AppStream/x86_64/os'
+  - name: downloadable-url
+    value: https://mirror.openshift.com/pub/openshift-v4/clients/crc/latest
+  - name: shasum-file
+    value: sha256sum.txt
+  - name: s3-folder-path
+    value: nightly/rhel/RHEL-8.8.0-20230127.0
+  - name: run-integration
+    value: "false"
+  workspaces:
+  - name: pipelines-data
+    persistentVolumeClaim:
+      claimName: pipelines-data
+  timeout: "5h"

@@ -1,0 +1,36 @@
+---
+apiVersion: tekton.dev/v1beta1
+kind: PipelineRun
+metadata:
+  generateName: crc-qe-virtualized-windows11-22h2-ent-
+spec:
+  pipelineRef:
+    name: crc-qe-virtualized
+  params:
+  - name: target-platform
+    value: windows
+  - name: windows-version
+    value: '11' 
+  - name: windows-featurepack
+    value: 22h2-ent
+  - name: windows-vmsize
+    value: Standard_D8s_v3
+  - name: internal-base-url
+    value: https://download.eng.bos.redhat.com/etera/crc/2/2.20/2.20.0-1/staging
+  - name: internal-asset-name
+    value: crc-windows-installer.zip
+  - name: internal-shasum-name
+    value: sha256sum.txt
+  - name: shasum-file
+    value: sha256sum.txt
+  - name: e2e-tag
+    value: '@basic'
+  - name: run-integration
+    value: "false"
+  - name: s3-folder-path
+    value: 'release/2.20.0'
+  workspaces:
+  - name: pipelines-data
+    persistentVolumeClaim:
+      claimName: pipelines-data
+  timeout: "5h"

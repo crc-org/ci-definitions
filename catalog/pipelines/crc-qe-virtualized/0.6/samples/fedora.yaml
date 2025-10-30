@@ -1,0 +1,35 @@
+---
+apiVersion: tekton.dev/v1beta1
+kind: PipelineRun
+metadata:
+  generateName: crc-qe-virtualized-fedora39-
+spec:
+  pipelineRef:
+    name: crc-qe-virtualized
+  params:
+  - name: fedora-version
+    value: '39'
+  - name: internal-base-url
+    value: https://download.eng.bos.redhat.com/etera/crc/2/2.29/2.29.0/staging
+  - name: internal-asset-name
+    value: crc-linux-amd64.tar.xz
+  - name: internal-shasum-name
+    value: sha256sum.txt
+  - name: shasum-file
+    value: sha256sum.txt
+  - name: s3-folder-path
+    value: release/2.9.0
+  workspaces:
+  - name: pipelines-data
+    persistentVolumeClaim:
+      claimName: pipelines-data
+  - name: aws-credentials
+    secret:
+      secretName: aws-crcqe-bot
+  - name: az-credentials
+    secret:
+      secretName: az-crcqe-bot
+  - name: reportportal-credentials
+    secret:
+      secretName: reportportal-crc
+  timeout: "5h"

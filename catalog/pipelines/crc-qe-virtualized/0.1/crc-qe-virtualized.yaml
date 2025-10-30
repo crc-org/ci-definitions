@@ -1,0 +1,320 @@
+---
+apiVersion: tekton.dev/v1beta1
+kind: Pipeline
+metadata:
+  name: crc-qe-virtualized
+  labels:
+    app.kubernetes.io/version: "0.1"
+    redhat.com/product: openshift-local
+    redhat.com/phase: qe
+  annotations:
+    tekton.dev/pipelines.minVersion: "0.24.x"
+    tekton.dev/categories: qe
+    tekton.dev/tags: openshift-local, qe, nested virualization
+    tekton.dev/displayName: "qe for openshift local on linux nested virtualization"
+    tekton.dev/platforms: "linux/amd64"
+spec:
+  description: >-
+    This pipeline will run the testing for openshift local on 
+    a specific linux version based on nested virtualization
+
+  workspaces:
+  - name: pipelines-data
+
+  params:
+  # Fedora related params
+  - name: fedora-version
+    default: ''
+  # Rhel related params
+  - name: rhel-version
+    default: ''
+  - name: repo-baseos-url
+    description: baseos repo url to setup on provisioned machine
+    default: ''
+  - name: repo-appstream-url
+    description: appstream repo url to setup on provisioned machine
+    default: ''
+  - name: rh-account-secret
+    description: ocp secret holding the credentials for a valid rh user to subscribe VM. Secret should be accessible to this task.
+    default: credentials-rh-subs-crcqe-prod
+  # Common params
+  - name: target-platform
+    default: linux
+  - name: image-id
+    description: internal id for image on virtualization provider (Openstack image ID)
+    default: ''
+  - name: downloadable-url
+    description: full base url to download ditributables and shasumsfiles
+    default: https://mirror.openshift.com/pub/openshift-v4/clients/crc/latest
+  - name: shasum-file
+    description: file name for shasum to check distributable
+    default: sha256sum.txt
+  # QE params
+  - name: e2e-tag
+    description: tags to select e2e scnearios. Default empty values which means all scnearios  
+    default: "''"  
+  - name: qe-worspace-subpath
+    description: subpath on workspace where storing ephemeral qe results
+    default: qe-results
+  - name: run-e2e
+    description: Control if e2e tests are executed. (true or false)
+    default: 'true'
+  - name: run-integration
+    description: Control if integration tests are executed. (true or false)
+    default: 'true'
+  # S3 params
+  - name: s3-data-secret
+    default: datalake-aws
+  - name: s3-bucket
+    default: crcqe-asia
+  - name: s3-folder-path
+    description: target folder to store results. (Example release/2.9.0)
+  
+  results:
+  - name: results-url
+    description: url to get results for the execution
+    value: $(tasks.url-generator.results.url)
+  - name: product-version
+    description: product version tested for this interop 
+    value: $(tasks.crc-info.results.crc-version)
+  - name: qe-duration
+    description: amount of time in seconds for qe execution (testing) 
+    value: $(tasks.qe.results.duration)
+
+  tasks:
+  - name: correlate
+    taskRef:
+      name: gather-run-info
+    workspaces:
+    - name: pipelines-data
+      workspace: pipelines-data
+  - name: s3-info
+    runAfter:
+    - correlate
+    taskRef:
+      name: gather-s3-info
+    params:
+    - name: s3-data-secret
+      value: $(params.s3-data-secret) 
+    - name: bucket
+      value: $(params.s3-bucket) 
+    - name: folder-path
+      # only one have value fedora-version or rhel-version
+      value: $(params.s3-folder-path)/$(params.fedora-version)$(params.rhel-version)
+  - name: crc-info
+    runAfter:
+    - correlate
+    taskRef:
+      name: gather-crc-info
+    params:
+    - name:  platform
+      value: $(params.target-platform)
+  - name: provision-fedora
+    runAfter:
+    - s3-info
+    - crc-info
+    taskRef:
+      name: infra-fedora-provision
+    when: 
+    - input: $(params.fedora-version)  
+      operator: notin
+      values: ['']
+    params:
+    - name: id
+      value: crc-qe-virtualized-fedora
+    - name: fedora-version
+      value: $(params.fedora-version)
+    - name: image-id
+      value: $(params.image-id)
+    - name: correlation
+      value: $(tasks.correlate.results.correlation)
+    - name: workspace-resources-path
+      value: $(tasks.correlate.results.workspace-resources-path)
+    workspaces:
+    - name: pipelines-data
+      workspace: pipelines-data
+    timeout: "20m" 
+  - name: provision-rhel
+    runAfter:
+    - s3-info
+    - crc-info
+    when: 
+    - input: $(params.rhel-version)  
+      operator: notin
+      values: ['']
+    taskRef:
+      name: infra-rhel-provision
+    params:
+    - name: id
+      value: crc-qe-virtualized-rhel
+    - name: rhel-version
+      value: $(params.rhel-version)
+    - name: repo-baseos-url
+      value: $(params.repo-baseos-url)
+    - name: repo-appstream-url
+      value: $(params.repo-appstream-url)
+    - name: rh-account-secret
+      value: $(params.rh-account-secret)
+    - name: image-id
+      value: $(params.image-id)
+    - name: correlation
+      value: $(tasks.correlate.results.correlation)
+    - name: workspace-resources-path
+      value: $(tasks.correlate.results.workspace-resources-path)
+    workspaces:
+    - name: pipelines-data
+      workspace: pipelines-data
+    timeout: "45m" 
+  - name: sync-provision
+    runAfter:
+    - s3-info
+    - crc-info
+    taskRef:
+      name: infra-syncer
+    params:
+    - name: workspace-resources-path
+      value: $(tasks.correlate.results.workspace-resources-path)
+    workspaces:
+    - name: pipelines-data
+      workspace: pipelines-data
+    timeout: "20m" 
+  - name: install
+    runAfter:
+    - sync-provision
+    taskRef:
+      name: crc-preparer
+    params:
+    - name: platform
+      value: $(params.target-platform)  
+    - name: ip
+      value: $(tasks.sync-provision.results.host)
+    - name: username
+      value: $(tasks.sync-provision.results.username)
+    - name: key
+      value: $(tasks.sync-provision.results.key-filename)
+    - name: workspace-resources-path
+      value: $(tasks.correlate.results.workspace-resources-path)
+    # Preparing crc version is only used for target path storage  
+    - name: downloadable-version
+      value: $(tasks.crc-info.results.crc-version)    
+    - name: downloadable-url
+      value: $(params.downloadable-url)  
+    - name: shasum-file
+      value: $(params.shasum-file)  
+    workspaces:
+    - name: pipelines-data
+      workspace: pipelines-data
+    timeout: "1h"  
+  - name: qe
+    runAfter:
+    - install
+    taskRef:
+      name: crc-qe-cli
+    params:
+    - name: platform
+      value: $(params.target-platform)  
+    - name: ip
+      value: $(tasks.sync-provision.results.host)
+    - name: username
+      value: $(tasks.sync-provision.results.username)
+    - name: key
+      value: $(tasks.sync-provision.results.key-filename)
+    - name: workspace-resources-path
+      value: $(tasks.correlate.results.workspace-resources-path)
+    - name: worspace-qe-subpath
+      value: $(params.qe-worspace-subpath)
+    # This is used to run e2e and integration containers
+    # Need to integrate a build from main and make it accessible
+    # For the time been we are good with latest released version
+    - name: crc-version
+      value: $(tasks.crc-info.results.crc-version)
+    - name: run-e2e
+      value: $(params.run-e2e) 
+    - name: e2e-tag
+      value: $(params.e2e-tag) 
+    - name: run-integration
+      value: $(params.run-integration) 
+    workspaces:
+    - name: pipelines-data
+      workspace: pipelines-data
+    timeout: "5h"   
+  - name: datalake-sink
+    runAfter:
+    - qe
+    taskRef:
+      name: s3-sink-workspace
+    params:
+    - name: s3-url
+      value: $(tasks.s3-info.results.upload-url)
+    - name: s3-access-key
+      value: $(tasks.s3-info.results.access-key)
+    - name: s3-secret-key
+      value: $(tasks.s3-info.results.secret-key)
+    - name: s3-folder-path
+      value: $(tasks.s3-info.results.upload-path)
+    - name: workspace-path
+      value: $(tasks.correlate.results.workspace-resources-path)
+    - name: workspace-subpath
+      value: $(params.qe-worspace-subpath) 
+    # Do not delete to keep tf state to decomission on final 
+    # This task should be splitted to allow only cleaning up
+    - name: workspace-cleanup
+      value: 'false'
+    workspaces:
+    - name: pipelines-data
+      workspace: pipelines-data
+    timeout: "15m"
+  - name: url-generator
+    taskRef:
+      name: url-generator
+    runAfter:
+    - datalake-sink
+    params:
+    - name: base-url
+      value: $(tasks.s3-info.results.download-url)
+    - name: context
+      value: $(params.qe-worspace-subpath)
+    - name: asset-name
+      value: e2e-non-ux.xml
+  finally:
+  - name: decomission-fedora
+    when: 
+    - input: $(params.fedora-version)  
+      operator: notin
+      values: ['']
+    taskRef:
+      name: infra-fedora-decommission
+    params:
+    - name: infra-id
+      # This is the value composed on infra provision for project
+      # if we keep the link with provision task if it fails this one will not run
+      value: crc-qe-virtualized-fedora-$(tasks.correlate.results.correlation)
+    - name: fedora-version
+      value: $(params.fedora-version)
+    - name: workspace-resources-path
+      value: $(tasks.correlate.results.workspace-resources-path)
+    workspaces:
+    - name: pipelines-data
+      workspace: pipelines-data
+    timeout: "15m"  
+  - name: decomission-rhel
+    when: 
+    - input: $(params.rhel-version)  
+      operator: notin
+      values: ['']
+    taskRef:
+      name: infra-rhel-decommission
+    params:
+    - name: infra-id
+      # This is the value composed on infra provision for project
+      # if we keep the link with provision task if it fails this one will not run
+      value: crc-qe-virtualized-rhel-$(tasks.correlate.results.correlation)
+    - name: rhel-version
+      value: $(params.rhel-version)
+    - name: workspace-resources-path
+      value: $(tasks.correlate.results.workspace-resources-path)
+    workspaces:
+    - name: pipelines-data
+      workspace: pipelines-data
+    timeout: "15m"  
+  
