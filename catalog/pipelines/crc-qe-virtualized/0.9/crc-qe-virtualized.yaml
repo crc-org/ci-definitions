@@ -401,6 +401,8 @@ spec:
       value: $(params.rhel-version)
     - name: tags
       value: "pipelinerunName=$(context.pipelineRun.name)"
+    - name: debug
+      value: $(params.debug)
     timeout: "20m"
   - name: provision-windows
     runAfter:
@@ -445,6 +447,8 @@ spec:
       value: $(params.windows-version)
     - name: tags
       value: "pipelinerunName=$(context.pipelineRun.name)"
+    - name: debug
+      value: $(params.debug)
     timeout: "20m"
   - name: sync-provision
     runAfter:
@@ -675,6 +679,9 @@ spec:
     - input: $(params.fedora-version)
       operator: notin
       values: ["''"]
+    - input: $(params.debug)
+      operator: in
+      values: ["false"]
     taskRef:
       resolver: git
       params:
@@ -739,6 +746,9 @@ spec:
     - input: $(params.windows-version)
       operator: notin
       values: ["''"]
+    - input: $(params.debug)
+      operator: in
+      values: ["false"]
     taskRef:
       resolver: git
       params:
@@ -778,7 +788,7 @@ spec:
       - name: results-wsstorage-path
         value: $(tasks.correlate.results.workspace-resources-path)/$(params.qe-worspace-subpath)
       - name: debug
-        value: 'true'
+        value: $(params.debug)
       - name: upload-log
         value: 'true'
       - name: launch-attributes
