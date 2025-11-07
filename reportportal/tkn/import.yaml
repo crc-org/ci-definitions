@@ -71,7 +71,6 @@ spec:
         mountPath: /opt/storage
     script: |
       #!/bin/sh
-      set -e
       set -x
 
       # If debug add verbosity
@@ -94,14 +93,15 @@ spec:
       fi
 
       failFlag='false'
+      
+      # remove the xml file if its size is 0 byte
+      find "/opt/storage/$(params.results-wsstorage-path)" -type f -name "*.xml" -size 0 -exec rm {} \;
       # Prepare results
       if find "/opt/storage/$(params.results-wsstorage-path)" -maxdepth 1 -name "*.xml" -print -quit | grep -q .; then
         cp /opt/storage/$(params.results-wsstorage-path)/*.xml .
       else
         failFlag='true'
       fi
-      # remove the xml file if its size is 0 byte
-      # find "/opt/storage/$(params.results-wsstorage-path)" -type f -name "*.xml" -size 0 -exec rm {} \;
 
 
       # Compress
