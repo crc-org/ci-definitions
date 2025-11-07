@@ -102,15 +102,15 @@ spec:
       fi
 
       failFlag='false'
+      # remove the xml file if its size is 0 byte
+      ws_path="/opt/results/$(params.results-wsstorage-path)"
+      find "$ws_path" -type f -name "*.xml" -size 0 -exec rm {} \;
       # Prepare results
-      if find "/opt/results/$(params.results-wsstorage-path)" -maxdepth 1 -name "*.xml" -print -quit | grep -q .; then
+      if find "$ws_path" -maxdepth 1 -name "*.xml" -print -quit 2>/dev/null | grep -q .; then
         cp /opt/results/$(params.results-wsstorage-path)/*.xml .
       else
         failFlag='true'
       fi
-      # remove the xml file if its size is 0 byte
-      # find "/opt/results/$(params.results-wsstorage-path)" -type f -name "*.xml" -size 0 -exec rm {} \;
-
 
       # Compress
       if [[ $failFlag == 'true' ]]; then
