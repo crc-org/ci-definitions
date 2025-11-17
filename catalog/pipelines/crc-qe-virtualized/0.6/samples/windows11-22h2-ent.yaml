@@ -1,0 +1,33 @@
+---
+apiVersion: tekton.dev/v1beta1
+kind: PipelineRun
+metadata:
+  generateName: crc-qe-virtualized-windows11-22h2-ent-
+spec:
+  pipelineRef:
+    name: crc-qe-virtualized
+  params:
+  - name: windows-version
+    value: '11' 
+  - name: windows-featurepack
+    value: 22h2-ent
+  - name: downloadable-url
+    value: https://developers.redhat.com/content-gateway/rest/mirror2/pub/openshift-v4/clients/crc/2.18.0
+  - name: shasum-file
+    value: sha256sum.txt
+  - name: s3-folder-path
+    value: 'release/2.18.0'
+  workspaces:
+  - name: pipelines-data
+    persistentVolumeClaim:
+      claimName: pipelines-data
+  - name: az-credentials
+    secret:
+      secretName: az-crcqe-bot
+  - name: aws-credentials
+    secret:
+      secretName: aws-crcqe-bot
+  - name: reportportal-credentials
+    secret:
+      secretName: reportportal-crc
+  timeout: "5h"

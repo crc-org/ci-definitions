@@ -1,0 +1,22 @@
+---
+apiVersion: tekton.dev/v1beta1
+kind: PipelineRun
+metadata:
+  generateName: crc-qe-virtualized-fedora37-
+spec:
+  pipelineRef:
+    name: crc-qe-virtualized
+  params:
+  - name: fedora-version
+    value: Fedora-Cloud-Base-37
+  - name: downloadable-url
+    value: https://download.eng.bos.redhat.com/staging-cds/developer/crc/2.9.0-1/staging
+  - name: shasum-file
+    value: sha256sum.txt
+  - name: s3-folder-path
+    value: 'release/2.9.0'
+  workspaces:
+  - name: pipelines-data
+    persistentVolumeClaim:
+      claimName: pipelines-data
+  timeout: "5h"
