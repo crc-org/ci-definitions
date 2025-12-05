@@ -81,20 +81,6 @@ spec:
         set -exuo pipefail
       fi
 
-      if [[ $(params.upload-log) == 'true' ]]; then
-        echo $(params.pipelinerunName)
-        tkn pipelinerun list | grep $(params.pipelinerunName)
-        if [[ $? == 0 ]]; then
-          tkn pipelinerun logs $(params.pipelinerunName) > pipelinerun.log
-          logPath=pipelinerun.log
-          xmlPath=pipelineLog.xml
-          python3 /opt/trans-log-xml.py $logPath $xmlPath
-          ls -lh
-        else 
-          echo "no pipelinerun $(params.pipelinerunName) found"
-        fi
-      fi
-
       failFlag='false'
       
       # remove the xml file if its size is 0 byte
@@ -107,6 +93,19 @@ spec:
         failFlag='true'
       fi
 
+      if [[ $(params.upload-log) == 'true' ]]; then
+        echo $(params.pipelinerunName)
+        tkn pipelinerun list | grep $(params.pipelinerunName)
+        if [[ $? == 0 ]]; then
+          tkn pipelinerun logs $(params.pipelinerunName) > pipelinerun.log
+          logPath=pipelinerun.log
+          xmlPath=pipelineLog.xml
+          python3 /opt/trans-log-xml.py $logPath $xmlPath $failFlag
+          ls -lh
+        else 
+          echo "no pipelinerun $(params.pipelinerunName) found"
+        fi
+      fi
 
       # Compress
       if [[ $failFlag == 'true' ]]; then
@@ -177,5 +176,3 @@ spec:
     - name: reportportal-credentials
       secret:
         secretName: $(params.secret-reportportal)
-    
-    

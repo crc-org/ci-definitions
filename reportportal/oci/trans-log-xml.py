@@ -3,14 +3,18 @@ import xml.etree.ElementTree as ET
 from xml.dom import minidom
 import sys
 
-def log_to_xml_with_steps(log_file, xml_file):
+def log_to_xml_with_steps(log_file, xml_file, fail_flag):
     # Create the root element for XML
     root = ET.Element("testsuites", name="pipeline-logs")
     suit_element = ET.SubElement(root, "testsuite", name='piplinerun')
     case_element = ET.SubElement(suit_element, "testcase",name='logs')
     root.set("tests", "1")
-    root.set("failures", "0")
-    root.set("status", "passed")
+    if fail_flag:
+        root.set("failures", "1")
+        root.set("status", "failed")
+    else:
+        root.set("failures", "0")
+        root.set("status", "passed")
 
     step_element = None
     task_element = None
@@ -56,10 +60,11 @@ def log_to_xml_with_steps(log_file, xml_file):
     print(f"Log file with steps converted to XML report: {xml_file}")
 
 
-if len(sys.argv) < 2:
-    print("Usage: python example.py <param1> <param2>")
+if len(sys.argv) < 4:
+    print("Usage: python example.py <param1> <param2> <param3>")
     sys.exit(1)
 
 log_file = sys.argv[1]  # First parameter
 xml_file = sys.argv[2]
-log_to_xml_with_steps(log_file, xml_file)
+fail_flag = sys.argv[3].lower() == "true"
+log_to_xml_with_steps(log_file, xml_file, fail_flag)
