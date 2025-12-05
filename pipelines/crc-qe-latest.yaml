@@ -20,23 +20,7 @@ spec:
     * testing part relies on download and use custom bundle will using crc (-b option) this is why it requires the download bundle parameters
     * then for testing will be used fixed machines (information for machines are coming from secrets)
     * assets and test results will be stored on S3
-
-  workspaces:
-    - name: storage
-    - name: ocp-pullsecret
-      description: |
-        crc secret name holding the pullsecret. This is only required if backed tested is crc preset
-
-        secret should match following format:
-        ---
-        apiVersion: v1
-        kind: Secret
-        metadata:
-          name: ${secret-name}
-        type: Opaque
-        data:
-          pullsecret: ${pullsecret-value}
-
+    
   params:
     - name: secret-tester
       description: |
@@ -395,9 +379,6 @@ spec:
         - name: debug
           value: $(params.debug)
       timeout: "1h"
-    # We need to adjust the target host info as we were using it previously
-    # based on storage on workspace and parameters. This should be changed on
-    # https://github.com/crc-org/ci-definitions/pull/39
     - name: host-info
       runAfter:
         - sync-build
@@ -448,25 +429,21 @@ spec:
         - host-info
         - install
       taskRef:
-        resolver: bundles
+        resolver: git
         params:
-        - name: bundle
-          value: quay.io/rhqp/crc-e2e-tkn:v1.0.0
-        - name: name
-          value: crc-e2e
-        - name: kind
-          value: task
+          - name: url
+            value: https://github.com/crc-org/ci-definitions
+          - name: revision
+            value: main
+          - name: pathInRepo
+            value: crc-e2e/qe-pvc.yaml
       params:
+      - name: secret-host
+        value: $(params.secret-tester)
       - name: os
         value: $(tasks.host-info.results.os)
       - name: arch
         value: $(tasks.host-info.results.arch)
-      - name: host
-        value: $(tasks.host-info.results.host)
-      - name: username
-        value: $(tasks.host-info.results.username)
-      - name: key
-        value: id_rsa
       - name: workspace-resources-path
         value: $(tasks.init.results.correlation)
       - name: worspace-qe-subpath
@@ -494,11 +471,6 @@ spec:
         value: $(params.integration-timeout)
       - name: debug
         value: $(params.debug)
-      workspaces:
-      - name: pipelines-data
-        workspace: storage
-      - name: ocp-pullsecret
-        workspace: ocp-pullsecret
       timeout: "5h" 
     - name: s3-upload-results
       runAfter:

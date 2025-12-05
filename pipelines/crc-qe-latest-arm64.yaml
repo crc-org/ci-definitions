@@ -21,23 +21,6 @@ spec:
     * for the building part it will provision an arm64 machine (azure as cheapest option)
     * then for testing it will spin an aws arm64 machine
     * assets and test results will be stored on S3
-
-  workspaces:
-    - name: storage
-    - name: ocp-pullsecret
-      description: |
-        crc secret name holding the pullsecret. This is only required if backed tested is crc preset
-
-        secret should match following format:
-        ---
-        apiVersion: v1
-        kind: Secret
-        metadata:
-          name: ${secret-name}
-        type: Opaque
-        data:
-          pullsecret: ${pullsecret-value}
-
   params:
     - name: s3-credentials
       default: s3-aws-crcqe-asia
@@ -309,25 +292,21 @@ spec:
         - install-binary
         - download-bundle
       taskRef:
-        resolver: bundles 
+        resolver: git 
         params:
-        - name: bundle
-          value: quay.io/rhqp/crc-e2e-tkn:v1.0.0
-        - name: name
-          value: crc-e2e
-        - name: kind
-          value: task
+          - name: url
+            value: https://github.com/crc-org/ci-definitions
+          - name: revision
+            value: main
+          - name: pathInRepo
+            value: crc-e2e/qe-pvc.yaml
       params:
+      - name: secret-host
+        value: $(tasks.provision-tester.results.host-access-secret)
       - name: os
         value: linux
       - name: arch
         value: arm64
-      - name: host
-        value: $(tasks.host-info.results.host)
-      - name: username
-        value: $(tasks.host-info.results.username)
-      - name: key
-        value: id_rsa
       - name: workspace-resources-path
         value: $(tasks.init.results.correlation)
       - name: worspace-qe-subpath
@@ -355,11 +334,6 @@ spec:
         value: $(params.integration-timeout)
       - name: debug
         value: $(params.debug) 
-      workspaces:
-      - name: pipelines-data
-        workspace: storage
-      - name: ocp-pullsecret
-        workspace: ocp-pullsecret
       timeout: "5h"   
     
     - name: s3-upload-results
