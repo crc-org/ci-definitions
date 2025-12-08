@@ -1,0 +1,623 @@
+---
+apiVersion: tekton.dev/v1beta1
+kind: Pipeline
+metadata:
+  name: crc-qe-virtualized
+  labels:
+    app.kubernetes.io/version: "0.10"
+    redhat.com/product: openshift-local
+    redhat.com/phase: qe
+  annotations:
+    tekton.dev/pipelines.minVersion: "0.44.x"
+    tekton.dev/categories: qe
+    tekton.dev/tags: openshift-local, qe, nested virualization
+    tekton.dev/displayName: "qe for openshift local"
+    tekton.dev/platforms: "linux/amd64"
+spec:
+  description: >-
+    This pipeline will run the testing for openshift local on 
+    a specific linux version based on nested virtualization
+
+  params:
+    # Windows related params
+    - name: windows-featurepack
+      description: windows feature pack (default "22h2-pro")
+      # default: 22h2-pro 
+      default: "''"
+    - name: windows-version
+      description: Major version for windows desktop 10 or 11 (default "11")
+      # default: '11'
+      default: "''"
+  
+    # Fedora related params
+    - name: fedora-version
+      description: Fedora Cloud version (i.e 39, 38, 37...)
+      default: "''"
+
+    # Rhel related params
+    - name: rhel-version
+      description: Major.Minor RHEL version (i.e 9.3, 9.2, 9,1...)
+      default: "''"
+    - name: rhel-arch
+      description: architecture for the target machine. Allowed x86_64 or arm64 (default "x86_64")
+      default: 'x86_64'
+    
+    # CRC params
+    - name: crc-version
+    - name: internal-base-url
+      description: in case of an internal release we can not directly download it but upload fisrt to s3. This setup the base url for the assets to be uploaded
+      default: "''"
+    - name: internal-asset-name
+      description: asset name to be uploaded 
+      default: "''"
+    - name: internal-shasum-name
+      description: shasum name to be uploaded 
+      default: "''"
+    - name: internal-shasum-target-name
+      description: setup the name for the internal shasum on s3
+      default: "''"
+    - name: downloadable-url
+      description: full base url to download ditributables and shasumsfiles
+      default: ''
+    - name: shasum-file
+      description: file name for shasum to check distributable
+      default: sha256sum.txt
+
+    # QE params
+    - name: qe-arch
+      description: type of arch (amd64, arm64). Defaults amd64. This should be align with rhel-arch param
+      default: amd64
+    - name: e2e-tag
+      description: tags to select e2e scnearios. Default empty values which means all scnearios  
+      default: "''"  
+    - name: qe-worspace-subpath
+      description: subpath on workspace where storing ephemeral qe results
+      default: qe-results
+    - name: run-e2e
+      description: Control if e2e tests are executed. (true or false)
+      default: 'true'
+    - name: run-integration
+      description: Control if integration tests are executed. (true or false)
+      default: 'true'
+
+    # S3 params (Storage results)
+    - name: s3-data-secret
+      default: aws-crcqe-bot
+    - name: s3-bucket
+      default: crcqe-asia
+    - name: s3-folder-path
+      description: target folder to store results. (Example release/2.9.0)
+
+    # Pipeline control params
+    - name: debug
+      description: control verbosity and keep instances after run for troubleshooting. 
+      default: 'false'
+    - name: target-cleanup
+      description: cleanup target ephemeral target folders on each step which requires them
+      default: 'true'
+    - name: test-catalog
+      description: Used for reportportal launch description
+      default: 'release-test'
+
+  tasks:
+  - name: correlate
+    taskSpec:
+      description: This task will create some correlate info as base for a execution
+      volumes:
+        - name: pipelines-data
+          persistentVolumeClaim:
+            claimName: pipelines-data
+      results:
+        - name: correlation
+          description: correlation number to be used along the pipeline
+        - name: date 
+          description: includes current date
+        - name: workspace-resources-path
+          description: path created as isolation for an execution within the workspace
+      steps:
+        - name: gather-data
+          image: registry.access.redhat.com/ubi8/ubi-minimal
+          volumeMounts:
+            - name: pipelines-data
+              mountPath: /opt/storage
+          script: |
+            #!/bin/sh
+
+            correlation=$RANDOM$RANDOM
+            echo -n $correlation | tee $(results.correlation.path)
+            echo -n $(date +'%Y%m%d') | tee $(results.date.path)
+            
+            # run path on workspace
+            run_path=$correlation
+            workspace_path=/opt/storage/${run_path}
+            mkdir -p "${workspace_path}"
+            chmod 777 "${workspace_path}"
+            echo -n ${run_path} | tee $(results.workspace-resources-path.path)
+  
+  - name: host-info
+    runAfter:
+    - correlate
+    params:
+    - name: fedora-version
+      value: $(params.fedora-version) 
+    - name: rhel-version
+      value: $(params.rhel-version) 
+    - name: windows-version
+      value: $(params.windows-version)$(params.windows-featurepack)
+    taskSpec:
+      params:
+      - name: fedora-version
+      - name: rhel-version
+      - name: windows-version
+      results:
+      - name: id
+      - name: os
+      - name: arch
+      steps:
+      - image: registry.access.redhat.com/ubi9/ubi-minimal
+        script: |
+          #!/bin/sh
+          arch="amd64"
+          os="linux"
+          id=""
+          if [[ $(params.fedora-version) != "" ]]; then
+            id="fedora-x86-$(params.fedora-version)"
+          fi
+          if [[ $(params.rhel-version) != "" ]]; then
+            id="rhel-x86-$(params.rhel-version)"
+          fi
+          if [[ $(params.windows-version) != "" ]]; then
+            os="windows"
+            id="windows-x86-$(params.windows-version)"
+          fi
+          echo -n "${id}" | tee $(results.id.path)
+          echo -n "${os}" | tee $(results.os.path)
+          echo -n "${arch}" | tee $(results.arch.path)
+  - name: internal-asset-upload
+    when: 
+      - input: $(params.internal-base-url)  
+        operator: notin
+        values: ["''"]
+      - input: $(params.internal-asset-name)  
+        operator: notin
+        values: ["''"]
+    runAfter:
+      - host-info
+    taskRef:
+      resolver: git
+      params:
+        - name: url
+          value: https://github.com/crc-org/ci-definitions
+        - name: revision
+          value: main
+        - name: pathInRepo
+          value: s3-uploader/tkn/s3-sync-http.yaml
+    params:
+    - name: asset-url
+      value: $(params.internal-base-url)/$(params.internal-asset-name)
+    - name: aws-datalake
+      value: $(params.s3-data-secret)
+    - name: s3-bucket
+      value: $(params.s3-bucket)
+    - name: s3-folder-path
+      value: $(params.s3-folder-path)/$(tasks.host-info.results.id)
+    timeout: "15m"
+  - name: internal-shasum-upload
+    when: 
+      - input: $(params.internal-base-url)  
+        operator: notin
+        values: ["''"]
+      - input: $(params.internal-shasum-name)  
+        operator: notin
+        values: ["''"]
+    runAfter:
+      - host-info
+    taskRef:
+      resolver: git
+      params:
+        - name: url
+          value: https://github.com/crc-org/ci-definitions
+        - name: revision
+          value: main
+        - name: pathInRepo
+          value: s3-uploader/tkn/s3-sync-http.yaml
+    params:
+    - name: asset-url
+      value: $(params.internal-base-url)/$(params.internal-shasum-name)
+    - name: aws-datalake
+      value: $(params.s3-data-secret)
+    - name: s3-bucket
+      value: $(params.s3-bucket)
+    - name: s3-folder-path
+      value: $(params.s3-folder-path)/$(tasks.host-info.results.id)
+    timeout: "15m"
+  - name: url-picker
+    runAfter:
+      - host-info
+    taskSpec:
+      description: >-
+        This task checks if pipeline will use internal url and then create a result with the new public url or directly passes
+        the external url from the pipeline params
+      params: 
+        - name: internal-base-url
+          description: internal url for assets to be move public
+        - name: public-base-url
+          description: expected public url in case internal asset
+        - name: external-base-url
+          description: external base url for asset
+      results:
+        - name: base-url
+      steps:
+        - name: pick-url
+          image: registry.access.redhat.com/ubi8/ubi-minimal
+          script: |
+            #!/bin/sh
+            url="$(params.external-base-url)"
+            if [[ $(params.internal-base-url) != "" ]]; then
+              url="$(params.public-base-url)"
+            fi
+            echo -n "${url}" | tee $(results.base-url.path)
+            
+          resources:      
+            requests:
+              memory: "50Mi"
+              cpu: "5m"
+            limits:
+              memory: "70Mi"
+              cpu: "10m"
+    params:
+    - name: internal-base-url
+      value: $(params.internal-base-url)
+    - name: public-base-url
+      value: $(tasks.internal-asset-upload.results.base_url)
+    - name: external-base-url
+      value: $(params.downloadable-url)  
+  - name: provision-fedora
+    runAfter:
+    - host-info
+    taskRef:
+      resolver: bundles 
+      params:
+      - name: bundle
+        value: quay.io/redhat-developer/mapt:v1.0.0-dev-tkn
+      - name: name
+        value: infra-aws-fedora
+      - name: kind
+        value: task
+    when: 
+    - input: $(params.fedora-version)  
+      operator: notin
+      values: ["''"]
+    params:
+    - name: secret-aws-credentials
+      value: aws-crcqe-bot
+    - name: id
+      value: $(tasks.correlate.results.correlation)
+    - name: operation
+      value: create
+    - name: host-access-secret-name
+      value: host-info-$(tasks.correlate.results.correlation)
+    - name: ownerKind
+      value: PipelineRun
+    - name: ownerName
+      value: $(context.pipelineRun.name)
+    - name: ownerUid
+      value: $(context.pipelineRun.uid)
+    - name: nested-virt
+      value: 'true'
+    - name: version
+      value: $(params.fedora-version)  
+    - name: tags
+      value: "pipelinerunName=$(context.pipelineRun.name)"
+    timeout: "20m" 
+  - name: provision-rhel
+    runAfter:
+    - host-info
+    when: 
+    - input: $(params.rhel-version)  
+      operator: notin
+      values: ["''"]
+    taskRef:
+      resolver: bundles 
+      params:
+      - name: bundle
+        value: quay.io/redhat-developer/mapt:v1.0.0-dev-tkn
+      - name: name
+        value: infra-aws-rhel
+      - name: kind
+        value: task
+    params:
+    - name: secret-aws-credentials
+      value: aws-crcqe-bot
+    - name: rh-credentials
+      value: credentials-rh-subs-crcqe-prod
+    - name: id
+      value: $(tasks.correlate.results.correlation)
+    - name: operation
+      value: create
+    - name: host-access-secret-name
+      value: host-info-$(tasks.correlate.results.correlation)
+    - name: ownerKind
+      value: PipelineRun
+    - name: ownerName
+      value: $(context.pipelineRun.name)
+    - name: ownerUid
+      value: $(context.pipelineRun.uid)
+    - name: nested-virt
+      value: 'true'
+    - name: arch
+      value: $(params.rhel-arch)
+    - name: version
+      value: $(params.rhel-version) 
+    - name: tags
+      value: "pipelinerunName=$(context.pipelineRun.name)"
+    timeout: "20m" 
+  - name: provision-windows
+    runAfter:
+    - host-info
+    when: 
+    - input: $(params.windows-featurepack)  
+      operator: notin
+      values: ["''"]
+    - input: $(params.windows-version)  
+      operator: notin
+      values: ["''"]
+    taskRef:
+      resolver: bundles 
+      params:
+      - name: bundle
+        value: quay.io/redhat-developer/mapt:v1.0.0-dev-tkn
+      - name: name
+        value: infra-azure-windows-desktop
+      - name: kind
+        value: task
+    params:
+    - name: secret-az-credentials
+      value: az-crcqe-bot
+    - name: id
+      value: $(tasks.correlate.results.correlation)
+    - name: operation
+      value: create
+    - name: host-access-secret-name
+      value: host-info-$(tasks.correlate.results.correlation)
+    - name: ownerKind
+      value: PipelineRun
+    - name: ownerName
+      value: $(context.pipelineRun.name)
+    - name: ownerUid
+      value: $(context.pipelineRun.uid)
+    - name: nested-virt
+      value: 'true'
+    - name: windows-featurepack
+      value: $(params.windows-featurepack) 
+    - name: windows-version
+      value: $(params.windows-version) 
+    - name: tags
+      value: "pipelinerunName=$(context.pipelineRun.name)"
+    timeout: "30m" 
+  - name: install
+    runAfter:
+    - provision-windows
+    - provision-fedora
+    - provision-rhel
+    - internal-asset-upload
+    - internal-shasum-upload
+    taskRef:
+      resolver: git
+      params:
+        - name: url
+          value: https://github.com/crc-org/ci-definitions
+        - name: revision
+          value: crc-support-v1.1.1
+        - name: pathInRepo
+          value: crc-support/tkn/task.yaml
+    params:
+    - name: secret-host
+      value: host-info-$(tasks.correlate.results.correlation)
+    - name: os
+      value: $(tasks.host-info.results.os)
+    - name: workspace-resources-path
+      value: $(tasks.correlate.results.workspace-resources-path)
+    # Preparing crc version is only used for target path storage  
+    - name: asset-name
+      value: $(params.internal-asset-name)   
+    - name: asset-base-url
+      value: $(tasks.url-picker.results.base-url)
+    # Only accessible url within downloadable-url or internal uploaded composed url  
+    - name: asset-shasum-name
+      value: $(params.shasum-file)    
+    - name: force-fresh
+      value: 'false'
+    - name: install
+      value: 'true'
+    - name: debug
+      value: $(params.debug)
+    timeout: "1h"  
+  - name: qe
+    taskRef:
+      resolver: git
+      params:
+        - name: url
+          value: https://github.com/crc-org/ci-definitions
+        - name: revision
+          value: main
+        - name: pathInRepo
+          value: crc-e2e/qe-pvc.yaml
+    runAfter:
+    - install
+    params:
+    - name: secret-host
+      value: host-info-$(tasks.correlate.results.correlation)
+    - name: os
+      value: $(tasks.host-info.results.os)
+    - name: arch
+      value: $(params.qe-arch) 
+    - name: workspace-resources-path
+      value: $(tasks.correlate.results.workspace-resources-path)
+    - name: worspace-qe-subpath
+      value: $(params.qe-worspace-subpath) 
+    - name: crc-version
+      value: $(params.crc-version) 
+    - name: run-e2e
+      value: $(params.run-e2e) 
+    - name: e2e-tag
+      value: $(params.e2e-tag) 
+    - name: e2e-cleanup-target
+      value: $(params.target-cleanup) 
+    - name: run-integration
+      value: $(params.run-integration) 
+    - name: integration-cleanup-target
+      value: $(params.target-cleanup) 
+    - name: debug
+      value: $(params.debug) 
+    timeout: "5h"
+  - name: s3-upload-results
+    runAfter:
+      - qe
+    taskRef:
+      resolver: git
+      params:
+        - name: url
+          value: https://github.com/crc-org/ci-definitions
+        - name: revision
+          value: main
+        - name: pathInRepo
+          value: s3-uploader/tkn/task.yaml
+    params:
+      - name: aws-credentials
+        value: aws-crcqe-bot
+      - name: pvc
+        value: pipelines-data
+      - name: ws-output-path
+        value: $(tasks.correlate.results.workspace-resources-path)
+      - name: qe-workspace-subpath
+        value: $(params.qe-worspace-subpath) 
+      - name: s3-bucket
+        value: $(params.s3-bucket)
+      - name: s3-path
+        value: $(params.s3-folder-path)/$(tasks.host-info.results.id)
+    timeout: "15m"
+  finally:
+  - name: decomission-fedora
+    when: 
+    - input: $(params.fedora-version)  
+      operator: notin
+      values: ["''"]
+    taskRef:
+      resolver: bundles 
+      params:
+      - name: bundle
+        value: quay.io/redhat-developer/mapt:v1.0.0-dev-tkn
+      - name: name
+        value: infra-aws-fedora
+      - name: kind
+        value: task
+    params:
+    - name: secret-aws-credentials
+      value: aws-crcqe-bot
+    - name: operation
+      value: destroy
+    - name: id
+      value: $(tasks.correlate.results.correlation)
+    - name: ownerKind
+      value: PipelineRun
+    - name: ownerName
+      value: $(context.pipelineRun.name)
+    - name: ownerUid
+      value: $(context.pipelineRun.uid)
+    timeout: "40m"  
+  - name: decomission-rhel
+    when: 
+    - input: $(params.rhel-version)  
+      operator: notin
+      values: ["''"]
+    - input: $(params.debug)
+      operator: in
+      values: ["false"]
+    taskRef:
+      resolver: bundles 
+      params:
+      - name: bundle
+        value: quay.io/redhat-developer/mapt:v1.0.0-dev-tkn
+      - name: name
+        value: infra-aws-rhel
+      - name: kind
+        value: task
+    params:
+    - name: secret-aws-credentials
+      value: aws-crcqe-bot
+    - name: rh-credentials
+      value: credentials-rh-subs-crcqe-prod
+    - name: operation
+      value: destroy
+    - name: id
+      value: $(tasks.correlate.results.correlation)
+    - name: ownerKind
+      value: PipelineRun
+    - name: ownerName
+      value: $(context.pipelineRun.name)
+    - name: ownerUid
+      value: $(context.pipelineRun.uid)
+    timeout: "40m"  
+  - name: decomission-windows
+    when: 
+    - input: $(params.windows-featurepack)  
+      operator: notin
+      values: ["''"]
+    - input: $(params.windows-version)  
+      operator: notin
+      values: ["''"]
+    taskRef:
+      resolver: bundles 
+      params:
+      - name: bundle
+        value: quay.io/redhat-developer/mapt:v1.0.0-dev-tkn
+      - name: name
+        value: infra-azure-windows-desktop
+      - name: kind
+        value: task
+    params:
+    - name: secret-az-credentials
+      value: az-crcqe-bot
+    - name: id
+      value: $(tasks.correlate.results.correlation)
+    - name: operation
+      value: destroy
+    - name: ownerKind
+      value: PipelineRun
+    - name: ownerName
+      value: $(context.pipelineRun.name)
+    - name: ownerUid
+      value: $(context.pipelineRun.uid)
+    timeout: "40m"  
+  - name: reportportal-import
+    taskRef:
+      resolver: git
+      params:
+      - name: url
+        value: https://github.com/crc-org/ci-definitions
+      - name: revision
+        value: main
+      - name: pathInRepo
+        value: reportportal/tkn/import.yaml
+    params:
+      - name: results-id
+        value: crc-$(params.crc-version)-$(tasks.host-info.results.id)
+      - name: results-wsstorage-path
+        value: $(tasks.correlate.results.workspace-resources-path)/$(params.qe-worspace-subpath)
+      - name: debug
+        value: $(params.debug)
+      - name: upload-log
+        value: 'true'
+      - name: launch-attributes
+        value: {"attributes": [{"key":"crc-version","value":"$(params.crc-version)"}, {"key": "skippedIssue", "value": true}]}
+      - name: launch-description
+        value: $(params.test-catalog)
+      - name: pipelinerunName
+        value: $(context.pipelineRun.name) 
+      - name: secret-reportportal
+        value: reportportal-crc
+      - name: pvc
+        value: pipelines-data
+    timeout: "15m"  
+    

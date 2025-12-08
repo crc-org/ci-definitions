@@ -1,0 +1,306 @@
+---
+apiVersion: tekton.dev/v1beta1
+kind: Pipeline
+metadata:
+  name: crc-qe-baremetal
+  labels:
+    app.kubernetes.io/version: "0.4"
+    redhat.com/product: openshift-local
+    dev.lifecycle.io/phase: qe
+    openshift-local.redhat.com/component: crc
+  annotations:
+    tekton.dev/pipelines.minVersion: "0.24.x"
+    tekton.dev/categories: qe
+    tekton.dev/tags: openshift-local, qe, baremetal
+    tekton.dev/displayName: "test openshift local on"
+    tekton.dev/platforms: "linux/amd64"
+spec:
+  description: >-
+    This pipeline will run qe on a "static" baremetal target server.
+  params:
+  - name: crc-version
+  # CRC distributable download info
+  - name: downloadable-url
+    description: full base url to download ditributables and shasumsfiles
+  - name: shasum-file
+    description: file name for shasum to check distributable
+    default: sha256sum.txt
+  # QE run params
+  - name: host-config-secret
+    description: secret holding the target host connection config
+  - name: qe-worspace-subpath
+    description: subpath on workspace where storing ephemeral qe results
+    default: qe-results
+  - name: run-e2e
+    description: Control if e2e tests are executed. (true or false)
+    default: 'true'
+  - name: e2e-tag
+    description: Tags to select e2e scnearios. Default empty values which means all scnearios.
+    default: "''"
+  - name: run-integration
+    description: Control if integration tests are executed. (true or false)
+    default: 'true'
+  - name: integration-timeout
+    description: total timeout for run integration suite
+    default: "90m"  
+  # S3 config params
+  - name: s3-bucket
+    default: crcqe-asia
+  - name: s3-folder-path
+    description: target folder to store results. (Example release/2.9.0)
+  # Control
+  - name: debug
+    description: debug the task cmds
+    default: 'false' 
+  - name: target-cleanup
+    description: cleanup target ephemeral target folders on each step which requires them
+    default: 'true'
+  - name: test-catelog
+    description: used for catelog in reportportal launch, nightly-run, bundle-test, crc-release-test
+    default: 'crc-release-test'
+
+  
+  tasks:
+  - name: correlate
+    taskSpec:
+      description: This task will create some correlate info as base for a execution
+      volumes:
+        - name: pipelines-data
+          persistentVolumeClaim:
+            claimName: pipelines-data
+      results:
+        - name: correlation
+          description: correlation number to be used along the pipeline
+        - name: date 
+          description: includes current date
+        - name: workspace-resources-path
+          description: path created as isolation for an execution within the workspace
+      steps:
+        - name: gather-data
+          image: registry.access.redhat.com/ubi8/ubi-minimal
+          volumeMounts:
+            - name: pipelines-data
+              mountPath: /opt/storage
+          script: |
+            #!/bin/sh
+
+            correlation=$RANDOM$RANDOM
+            echo -n $correlation | tee $(results.correlation.path)
+            echo -n $(date +'%Y%m%d') | tee $(results.date.path)
+            
+            # run path on workspace
+            run_path=$correlation
+            workspace_path=/opt/storage/${run_path}
+            mkdir -p "${workspace_path}"
+            chmod 777 "${workspace_path}"
+            echo -n ${run_path} | tee $(results.workspace-resources-path.path)
+  - name: host-info
+    taskSpec:
+      params:
+        - name: host-config-secret
+          description: secret holding a host config
+      results:
+        - name: host
+          description: target host to run crc testing
+        - name: username
+          description: username to connect to target host
+        - name: password
+          description: password for user
+        - name: key
+          description: key to connect to target host
+        - name: platform
+          description: target platform
+        - name: os-version
+          description: target os version
+        - name: arch
+          description: target architecture
+        - name: os
+          description: target os 
+        - name: id
+      volumes:
+        - name: host-connection
+          secret:
+            secretName: $(params.host-config-secret)
+      steps:
+        - image: registry.access.redhat.com/ubi8/ubi-minimal
+          volumeMounts:
+            - mountPath: /opt/host/
+              name: host-connection
+          script: |
+            #!/bin/sh
+
+            echo -n $(cat /opt/host/host) | tee $(results.host.path)
+            echo -n $(cat /opt/host/username) | tee $(results.username.path)
+            echo -n $(cat /opt/host/password) | tee $(results.password.path)
+            echo -n $(cat /opt/host/platform) | tee $(results.platform.path)
+            echo -n $(cat /opt/host/os-version) | tee $(results.os-version.path)
+            echo -n $(cat /opt/host/arch) | tee $(results.arch.path)
+            echo -n $(cat /opt/host/os) | tee $(results.os.path)       
+            id=$(cat /opt/host/os)-$(cat /opt/host/arch)-$(cat /opt/host/os-version)
+            echo -n $id | tee $(results.id.path) 
+    runAfter:
+    - correlate
+    params:
+    - name: host-config-secret
+      value: $(params.host-config-secret) 
+  - name: crc-info
+    runAfter:
+    - host-info
+    taskSpec:
+      params:
+        - name: platform
+        - name: arch
+      results:
+        - name: distributable-name
+      steps:
+      - image: registry.access.redhat.com/ubi8/ubi-minimal
+        name: crc-info
+        script: |
+          #!/bin/sh
+          case "$(params.platform)" in
+          macos|darwin)
+            echo -n "crc-macos-installer.pkg" | tee $(results.distributable-name.path)
+            ;;
+          windows)
+            echo -n "crc-windows-installer.zip" | tee $(results.distributable-name.path)
+            ;;
+          linux)
+            echo -n "crc-linux-$(params.arch).tar.xz" | tee $(results.distributable-name.path)
+            ;;
+          esac
+    params:
+      - name: platform
+        value: $(tasks.host-info.results.platform)
+      - name: arch
+        value: $(tasks.host-info.results.arch)
+  - name: install
+    taskRef:
+      resolver: git 
+      params:
+        - name: url
+          value: https://github.com/crc-org/ci-definitions
+        - name: revision
+          value: crc-support-v1.1.1
+        - name: pathInRepo
+          value: crc-support/tkn/task.yaml
+    runAfter:
+    - crc-info
+    params:
+    - name: secret-host
+      value: $(params.host-config-secret)
+    - name: os
+      value: $(tasks.host-info.results.os)
+    - name: workspace-resources-path
+      value: $(tasks.correlate.results.workspace-resources-path)
+    # Preparing crc version is only used for target path storage  
+    - name: asset-name
+      value: $(tasks.crc-info.results.distributable-name)    
+    - name: asset-base-url
+      value: $(params.downloadable-url)  
+    - name: asset-shasum-name
+      value: $(params.shasum-file)  
+    - name: force-fresh
+      value: 'true'
+    - name: install
+      value: 'true'
+    - name: debug
+      value: $(params.debug)
+    timeout: "1h"  
+  - name: qe
+    taskRef:
+      resolver: git
+      params:
+        - name: url
+          value: https://github.com/crc-org/ci-definitions
+        - name: revision
+          value: main
+        - name: pathInRepo
+          value: crc-e2e/qe-pvc.yaml
+    runAfter:
+    - install
+    params:
+    - name: secret-host
+      value: $(params.host-config-secret) 
+    - name: os
+      value: $(tasks.host-info.results.os)
+    - name: arch
+      value: $(tasks.host-info.results.arch)
+    - name: workspace-resources-path
+      value: $(tasks.correlate.results.workspace-resources-path)
+    - name: worspace-qe-subpath
+      value: $(params.qe-worspace-subpath) 
+    - name: crc-version
+      value: $(params.crc-version) 
+    - name: run-e2e
+      value: $(params.run-e2e) 
+    - name: e2e-tag
+      value: $(params.e2e-tag) 
+    - name: e2e-cleanup-target
+      value: $(params.target-cleanup) 
+    - name: run-integration
+      value: $(params.run-integration) 
+    - name: integration-timeout
+      value: $(params.integration-timeout) 
+    - name: integration-cleanup-target
+      value: $(params.target-cleanup) 
+    - name: debug
+      value: $(params.debug)
+    timeout: "5h"    
+  - name: s3-upload-results
+    runAfter:
+    - qe
+    taskRef:
+      resolver: git
+      params:
+        - name: url
+          value: https://github.com/crc-org/ci-definitions
+        - name: revision
+          value: main
+        - name: pathInRepo
+          value: s3-uploader/tkn/task.yaml
+    params:
+    - name: aws-credentials
+      value: aws-crcqe-bot
+    - name: pvc
+      value: pipelines-data
+    - name: ws-output-path
+      value: $(tasks.correlate.results.workspace-resources-path)
+    - name: qe-workspace-subpath
+      value: $(params.qe-worspace-subpath) 
+    - name: s3-bucket
+      value: $(params.s3-bucket)
+    - name: s3-path
+      value: $(params.s3-folder-path)/$(tasks.host-info.results.id)
+    timeout: "15m"
+  
+  finally:
+  - name: reportportal-import
+    taskRef:
+      resolver: git
+      params:
+      - name: url
+        value: https://github.com/crc-org/ci-definitions
+      - name: revision
+        value: main
+      - name: pathInRepo
+        value: reportportal/tkn/import.yaml
+    params:
+    - name: results-id
+      value: crc-$(params.crc-version)-$(tasks.host-info.results.os)-$(tasks.host-info.results.arch)-$(tasks.host-info.results.os-version)  
+    - name: results-wsstorage-path
+      value: $(tasks.correlate.results.workspace-resources-path)/$(params.qe-worspace-subpath)
+    - name: debug
+      value: $(params.debug)
+    - name: upload-log
+      value: 'true'
+    - name: launch-attributes
+      value: {"attributes": [{"key":"crc-version","value":"$(params.crc-version)"}, {"key": "skippedIssue", "value": true}]}
+    - name: launch-description
+      value: $(params.test-catelog) 
+    - name: pipelinerunName
+      value: $(context.pipelineRun.name)
+    - name: secret-reportportal
+      value: reportportal-crc
+    - name: pvc
+      value: pipelines-data
+    timeout: "15m"

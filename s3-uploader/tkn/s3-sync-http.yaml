@@ -1,0 +1,91 @@
+---
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: s3-sync-http
+  labels:
+    app.kubernetes.io/version: "0.1"
+    dev.lifecycle.io/phase: data
+  annotations:
+    tekton.dev/pipelines.minVersion: "0.24.x"
+    tekton.dev/categories: common
+    tekton.dev/tags: data, s3
+    tekton.dev/displayName: "s3 data uploader"
+    tekton.dev/platforms: "linux/amd64"
+spec:
+  description: >-
+    This task will sink some internal assets accessible on an http server to an S3 compatible storage
+  volumes:
+    - name: aws-datalake
+      secret:
+        secretName: $(params.aws-datalake)
+  params: 
+  - name: aws-datalake
+    default: aws-crcqe-bot
+    description: |
+      ocp secret holding the aws credentials. Secret should be accessible to this task.
+      ---
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: aws-${name}
+        labels:
+          app.kubernetes.io/component: ${name}
+          app.kubernetes.io/part-of: qe-platform
+      type: Opaque
+      data:
+        access-key: ${access_key}
+        secret-key: ${secret_key}
+        provider: ${provider}
+        url: ${url}
+  - name: asset-url 
+  - name: s3-bucket
+  - name: s3-folder-path
+    description: destination path on the datalake
+
+  results:
+  - name: download_url
+    description: temporary url for asset
+  - name: base_url
+    description: temporary url for asset
+
+  steps:
+  - name: sink-asset
+    image: quay.io/crc-org/s3-uploader:v1.0.0
+    volumeMounts:
+      - name: aws-datalake
+        mountPath: /opt/aws-credentials
+    script: |
+      #!/bin/bash 
+      cd /home/1001
+      set -euo pipefail
+      asset_url="$(params.asset-url)"
+      curl -kLO ${asset_url}
+      asset_name="${asset_url##*/}"
+      
+
+      # Configure datalake
+      mkdir -p /home/1001/.aws
+      cat <<EOF > /home/1001/.aws/credentials
+      [default]
+      aws_access_key_id     = $(cat /opt/aws-credentials/access-key)
+      aws_secret_access_key = $(cat /opt/aws-credentials/secret-key)
+      EOF
+      cat <<EOF > /home/1001/.aws/config
+      [default]
+      region = $(cat /opt/aws-credentials/region)
+      EOF
+      
+      aws s3 cp "${asset_name}" "s3://$(params.s3-bucket)/$(params.s3-folder-path)/"
+      echo -n "https://$(params.s3-bucket).s3.amazonaws.com/$(params.s3-folder-path)/${asset_name}" | tee $(results.download_url.path)
+      echo -n "https://$(params.s3-bucket).s3.amazonaws.com/$(params.s3-folder-path)" | tee $(results.base_url.path)
+
+    resources:      
+      requests:
+        memory: "150Mi"
+        cpu: "50m"
+      limits:
+        memory: "700Mi"
+        cpu: "100m"
+  
+      
