@@ -10,11 +10,17 @@ def log_to_xml_with_steps(log_file, xml_file, fail_flag):
     case_element = ET.SubElement(suit_element, "testcase",name='logs')
     root.set("tests", "1")
     if fail_flag:
-        root.set("failures", "1")
-        root.set("status", "failed")
+        suit_element.set("failures", "1")
+        suit_element.set("status", "failed")
+        ET.SubElement(
+            case_element,
+            "failure",
+            message="Pipeline failed",
+            type="PipelineFailure"
+        )
     else:
-        root.set("failures", "0")
-        root.set("status", "passed")
+        suit_element.set("failures", "0")
+        suit_element.set("status", "passed")
 
     step_element = None
     task_element = None
