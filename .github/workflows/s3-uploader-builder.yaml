@@ -2,7 +2,8 @@ name: s3-uploader-builder
 
 on:
   push:
-    tags: [ 's3-uploader-v*' ]       
+    branches: [ main ]     
+    paths: ['Makefile', 's3-uploader/**', '.github\/workflows\/s3-uploader*' ]
   pull_request:
     branches: [ main ]
     paths: ['Makefile', 's3-uploader/**', '.github\/workflows\/s3-uploader*' ]

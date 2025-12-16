@@ -2,7 +2,8 @@ name: reportportal-builder
 
 on:
   push:
-    tags: [ 'reportportal-v*' ]       
+    branches: [ main ]  
+    paths: ['Makefile', 'reportportal/**', '.github\/workflows\/reportportal*' ]
   pull_request:
     branches: [ main ]
     paths: ['Makefile', 'reportportal/**', '.github\/workflows\/reportportal*' ]
