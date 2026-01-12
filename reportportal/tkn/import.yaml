@@ -51,7 +51,7 @@ spec:
     description: debug the task cmds
     default: 'false' 
   - name: upload-log
-    default: 'false'
+    default: 'true'
     description: |
       whether upload the current pipelinerun logs. 
       If true, the task will gather current pipeline-run logs to xml, then upload to reportportal.
@@ -97,12 +97,21 @@ spec:
         echo $(params.pipelinerunName)
         tkn pipelinerun list | grep $(params.pipelinerunName)
         if [[ $? == 0 ]]; then
-          tkn pipelinerun logs $(params.pipelinerunName) > pipelinerun.log
-          logPath=pipelinerun.log
           xmlPath=pipelineLog.xml
-          python3 /opt/trans-log-xml.py $logPath $xmlPath $failFlag
+          child_refernces=$(tkn pipelinerun describe $(params.pipelinerunName) -o json | jq -r '.status.childReferences[].name')
+          testcases_json='{}'
+          for child_reference in $child_refernces; do
+            taskrun_status=$(tkn taskrun describe $child_reference -o json | jq -r '.status.conditions[].status')
+            if [[ $taskrun_status == 'Unknown' ]]; then
+              continue
+            fi
+            tkn taskrun logs $child_reference > task_logs.txt
+            testcases_json=$(echo "$testcases_json" | jq --arg name "$child_reference" --arg status "$taskrun_status" --rawfile logs task_logs.txt '. + {($name): {"status": $status, "logs": $logs}}')
+          done
+          echo "$testcases_json" > payload.json
+          python3 /create-junit-file.py payload.json $xmlPath $failFlag
           ls -lh
-        else 
+        else
           echo "no pipelinerun $(params.pipelinerunName) found"
         fi
       fi
@@ -170,7 +179,6 @@ spec:
 
   volumes:
     - name: storage
-      description: storage volume where to find the results to be imported
       persistentVolumeClaim:
         claimName: $(params.pvc)
     - name: reportportal-credentials
