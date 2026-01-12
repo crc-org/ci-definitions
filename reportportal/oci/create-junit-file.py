@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import sys
 import json
-import json
 from junitparser import TestCase, TestSuite, JUnitXml, Failure
 
 if len(sys.argv) < 4: 
@@ -30,8 +29,8 @@ if not fail_flag:
     testcase = TestCase("pipeline-logs")
 
     for taskrun_name, testcase_data in testcases_map.items():
-        taskrun_status = testcase_data.get("status", "")
-        taskrun_logs = testcase_data.get("logs", "")
+        taskrun_status = testcase_data.get('status', '')
+        taskrun_logs = testcase_data.get('logs', '')
 
         sanitized_logs = ''.join(
             c for c in taskrun_logs if ord(c) >= 32 or c in '\n\r\t'
@@ -47,8 +46,8 @@ else:
     first_testcase = None
 # Process all test cases
     for taskrun_name, testcase_data in testcases_map.items():
-        taskrun_status = testcase_data.get('status')
-        taskrun_logs = testcase_data.get('logs')
+        taskrun_status = testcase_data.get('status', '')
+        taskrun_logs = testcase_data.get('logs', '')
         
         testcase = TestCase(taskrun_name)
         sanitized_logs = ''.join(char for char in taskrun_logs if ord(char) >= 32 or char in '\n\r\t')

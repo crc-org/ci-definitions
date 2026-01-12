@@ -98,9 +98,9 @@ spec:
         tkn pipelinerun list | grep $(params.pipelinerunName)
         if [[ $? == 0 ]]; then
           xmlPath=pipelineLog.xml
-          child_refernces=$(tkn pipelinerun describe $(params.pipelinerunName) -o json | jq -r '.status.childReferences[].name')
+          child_references=$(tkn pipelinerun describe $(params.pipelinerunName) -o json | jq -r '.status.childReferences[].name')
           testcases_json='{}'
-          for child_reference in $child_refernces; do
+          for child_reference in $child_references; do
             taskrun_status=$(tkn taskrun describe $child_reference -o json | jq -r '.status.conditions[].status')
             if [[ $taskrun_status == 'Unknown' ]]; then
               continue
