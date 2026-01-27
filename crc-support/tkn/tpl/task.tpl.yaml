@@ -52,6 +52,9 @@ spec:
     - name: asset-base-url
       description: base url for the asset to be downloaded
       default: "''"
+    - name: asset-base-url-fallback
+      description: base url fallback for the asset to be downloaded
+      default: "''"
     - name: asset-oras-address
       description: the oras address of the asset
       default: ""
@@ -190,6 +193,7 @@ spec:
 
       cmd="${TARGET_FOLDER}/${runner} -targetPath $tPath "
       cmd+="-aBaseURL $(params.asset-base-url) "
+      cmd+="-aBaseURLFallback $(params.asset-base-url-fallback) "
       cmd+="-aName $(params.asset-name) "
       cmd+="-aSHAName $(params.asset-shasum-name) "
       cmd+="-freshEnv $(params.force-fresh) "
