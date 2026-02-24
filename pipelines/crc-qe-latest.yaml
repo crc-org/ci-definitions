@@ -221,7 +221,7 @@ spec:
           - name: url
             value: https://github.com/crc-org/ci-definitions
           - name: revision
-            value: crc-builder-v1.1.0
+            value: main
           - name: pathInRepo
             value: crc-builder/tkn/crc-builder-installer.yaml
       params:

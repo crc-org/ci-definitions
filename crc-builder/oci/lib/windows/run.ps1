@@ -26,6 +26,7 @@ $ErrorActionPreference = "Stop"
 # $1 remote path
 # $2 local path to be uploaded
 function S3-Upload($uploadPath, $localPath) {
+    $env:MC_INSECURE="true"
     
     .\mc.exe alias set datalake $datalakeURL `
         $datalakeAcessKey `

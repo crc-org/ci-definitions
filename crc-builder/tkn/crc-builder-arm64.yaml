@@ -1,0 +1,254 @@
+---
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: crc-builder-arm64
+  labels:
+    app.kubernetes.io/version: "v2.0.0-dev"
+    redhat.com/product: openshift-local
+    dev.lifecycle.io/phase: build
+    openshift-local.redhat.com/component: binary
+  annotations:
+    tekton.dev/pipelines.minVersion: "0.44.x"
+    tekton.dev/categories: binary
+    tekton.dev/tags: openshift-local, binary, linux
+    tekton.dev/displayName: "openshift local linux binary"
+    tekton.dev/platforms: "linux/amd64"
+spec:
+  description: >-
+    This task will build openshift local binary for linux distributions on arm64.
+
+    As part of the steps included on the task an arm64 machine is provisioned to run the builder on it.
+
+  volumes:
+    - name: pipelines-data
+      emptyDir: {}
+    - name: s3-credentials
+      secret:
+        secretName: $(params.s3-credentials)      
+    - name: az-credentials
+      secret:
+        secretName: $(params.az-credentials)
+      
+
+  params:
+    # credentials
+    - name: s3-credentials
+      default: s3-aws-crcqe-asia
+      description: |
+        ocp secret holding the s3 credentials. Secret should be accessible to this task.
+        ---
+        apiVersion: v1
+        kind: Secret
+        metadata:
+          name: XXXX
+          labels:
+            app.kubernetes.io/component: XXXX
+        type: Opaque
+        data:
+          download-url: ${download_url}  
+          upload-url: ${upload_url}  
+          bucket: ${bucket_value}  
+          access-key: ${access_key}
+          secret-key: ${secret_key}
+    - name: az-credentials
+      default: aws-crcqe-bot
+      description: |
+        ocp secret holding the azure credentials. Secret should be accessible to this task.
+
+        To be a valid secret it should contains the following fields:
+        * tenant_id
+        * subscription_id
+        * client_id
+        * client_secret
+        * storage_account (optional if we use remote az storage)
+        * storage_key (optional if we use remote az storage)
+    
+    # SCM params
+    - name: crc-scm
+      default: https://github.com/code-ready/crc.git
+    - name: crc-scm-ref 
+      default: main
+    - name: crc-scm-pr
+      default: "''"
+    
+
+    # Target params
+    - name: s3-folder-path
+      default: 'crc-binaries'
+
+    # Builder params
+    - name: builder-cpus 
+      description: This param set the number of CPUs to pick the builder machine for binaries. More CPUs makes machine more expensive but build assets in less time.
+      default: '8'
+    - name: builder-memory
+      description: This param set the memory to pick the builder machine for binaries. More memory makes machine more expensive but build assets in less time
+      default: '64'
+  
+  results:
+    - name: downloadable-base-url
+      description: base url where the installer and the shasumfile can be downloaded
+    - name: distributable-name
+      description: distributable file name for the installer
+    - name: shasumfile
+      description: shasumfile name 
+
+  steps:
+    - name: provisioner
+      image: quay.io/redhat-developer/mapt:v0.9.6
+      volumeMounts:
+        - name: az-credentials
+          mountPath: /opt/credentials
+        - name: pipelines-data
+          mountPath: /opt/pipelines-data
+      script: |
+        #!/bin/sh
+        set -x
+        
+        # Credentials
+        export ARM_TENANT_ID=$(cat /opt/credentials/tenant_id)
+        export ARM_SUBSCRIPTION_ID=$(cat /opt/credentials/subscription_id)
+        export ARM_CLIENT_ID=$(cat /opt/credentials/client_id)
+        export ARM_CLIENT_SECRET=$(cat /opt/credentials/client_secret)
+        if ! [ -f /opt/credentials/storage_account ]; then
+          export AZURE_STORAGE_ACCOUNT=$(cat /opt/credentials/storage_account)
+        fi
+        if ! [ -f /opt/credentials/storage_key ]; then
+          export AZURE_STORAGE_KEY=$(cat /opt/credentials/storage_key)
+        fi
+        
+        # Output folder
+        workspace_path=/opt/pipelines-data/fedora
+        mkdir -p ${workspace_path}
+
+        # Run mapt
+        cmd="mapt azure fedora create --project-name fedora "
+        cmd+="--backed-url file://${workspace_path} "
+        cmd+="--conn-details-output ${workspace_path} "
+        cmd+="--arch arm64 --cpus $(params.builder-cpus) --memory $(params.builder-memory) --spot --spot-eviction-tolerance low "
+        eval "${cmd}"
+        if [[ $? -ne 0 ]]; then 
+          exit 1
+        fi
+        
+      resources:      
+        requests:
+          memory: "200Mi"
+          cpu: "100m"
+        limits:
+          memory: "1000Mi"
+          cpu: "400m"
+    - name: build
+      # quay.io/crc-org/ci-crc-builder and v2.0.0-dev values should be passed to the template
+      image: quay.io/rhqp/support-tools:v0.0.4
+      volumeMounts:
+        - name: s3-credentials
+          mountPath: /opt/s3-credentials
+        - name: pipelines-data
+          mountPath: /opt/pipelines-data
+      script: |
+          #!/bin/sh
+          set -x
+
+          connect_options() {
+            local options="-o StrictHostKeyChecking=no"
+            options="$options -o UserKnownHostsFile=/dev/null"
+            options="$options -o ServerAliveInterval=30"
+            options="$options -o ServerAliveCountMax=1200"
+            options="$options -o BatchMode=yes"
+            options="$options -o ConnectTimeout=3"
+            echo $options
+          }
+
+          cmd="podman run --rm --name crc-builder -d "
+          # SCM
+          cmd+="-e CRC_SCM=$(params.crc-scm) "
+          cmd+="-e CRC_SCM_REF=$(params.crc-scm-ref) "
+          if [[ $(params.crc-scm-pr) != "" ]]; then
+            cmd+="-e CRC_SCM_PR=$(params.crc-scm-pr) "
+          fi
+          cmd+="-e DATALAKE_URL=$(cat /opt/s3-credentials/upload-url) "
+          cmd+="-e DATALAKE_ACCESS_KEY=$(cat /opt/s3-credentials/access-key) "
+          cmd+="-e DATALAKE_SECRET_KEY=$(cat /opt/s3-credentials/secret-key) "
+          if [[ $(params.s3-folder-path) != "" ]]; then
+            cmd+="-e UPLOAD_PATH=$(cat /opt/s3-credentials/bucket)/$(params.s3-folder-path) "
+          fi
+          cmd+="-e DEBUG=true "
+          cmd+="quay.io/crc-org/ci-crc-builder:v2.0.0-dev-linux-arm64"
+
+          key=/opt/pipelines-data/fedora/id_rsa
+          username=$(cat /opt/pipelines-data/fedora/username)
+          host=$(cat /opt/pipelines-data/fedora/host)
+
+          # Exec
+          # We need podman on the machine
+          ssh $(connect_options) -i ${key} $username@$host "sudo dnf -y install podman"
+          # Now we can run the builder 
+          ssh $(connect_options) -i ${key} $username@$host "${cmd}"
+          # Check logs
+          cmd="podman logs -f crc-builder "
+          ssh $(connect_options) -i ${key} $username@$host "${cmd}" 
+      
+          if [[ $? -ne 0 ]]; then 
+            exit 1
+          fi
+
+          # From entrypoint we can get UPLOAD_PATH env with the target bucket 
+          echo -n "$(cat /opt/s3-credentials/download-url)/$(params.s3-folder-path)" | tee $(results.downloadable-base-url.path)
+          # Linux generated files
+          echo -n "crc-linux-arm64.tar.xz" | tee $(results.distributable-name.path)
+          echo -n "crc-linux-arm64.tar.xz.sha256sum" | tee $(results.shasumfile.path)
+      resources:      
+        requests:
+          memory: 150Mi
+          cpu: 100m
+        limits:
+          memory: 500Mi
+          cpu: 250m
+      timeout: 900m
+    - name: decommission
+      image: quay.io/redhat-developer/mapt:v0.9.6
+      volumeMounts:
+        - name: az-credentials
+          mountPath: /opt/credentials
+        - name: pipelines-data
+          mountPath: /opt/pipelines-data
+      onError: continue
+      script: |
+        #!/bin/sh
+        set -x
+        
+        # Credentials
+        export ARM_TENANT_ID=$(cat /opt/credentials/tenant_id)
+        export ARM_SUBSCRIPTION_ID=$(cat /opt/credentials/subscription_id)
+        export ARM_CLIENT_ID=$(cat /opt/credentials/client_id)
+        export ARM_CLIENT_SECRET=$(cat /opt/credentials/client_secret)
+        if ! [ -f /opt/credentials/storage_account ]; then
+          export AZURE_STORAGE_ACCOUNT=$(cat /opt/credentials/storage_account)
+        fi
+        if ! [ -f /opt/credentials/storage_key ]; then
+          export AZURE_STORAGE_KEY=$(cat /opt/credentials/storage_key)
+        fi
+        
+        # Output folder
+        workspace_path=/opt/pipelines-data/fedora
+        mkdir -p ${workspace_path}
+
+        # Run mapt
+        cmd="mapt azure fedora destroy --project-name fedora "
+        cmd+="--backed-url file://${workspace_path} "
+        eval "${cmd}"
+        if [[ $? -ne 0 ]]; then 
+          exit 1
+        fi
+        
+      resources:      
+        requests:
+          memory: "200Mi"
+          cpu: "100m"
+        limits:
+          memory: "600Mi"
+          cpu: "300m"
+
+
+

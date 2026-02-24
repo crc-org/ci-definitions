@@ -1,0 +1,169 @@
+---
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: crc-builder-installer
+  labels:
+    app.kubernetes.io/version: "v2.0.0-dev"
+    redhat.com/product: openshift-local
+    dev.lifecycle.io/phase: build
+    openshift-local.redhat.com/component: installer
+  annotations:
+    tekton.dev/pipelines.minVersion: "0.44.x"
+    tekton.dev/categories: installer
+    tekton.dev/tags: openshift-local, installer
+    tekton.dev/displayName: "openshift local installer"
+    tekton.dev/platforms: "linux/amd64"
+spec:
+  description: >-
+    This task will build openshift local installers 
+
+  volumes:
+    - name: s3-credentials
+      secret:
+        secretName: $(params.s3-credentials)  
+    - name: host-info
+      secret:
+        secretName: $(params.host-info)
+
+  params:
+    - name: s3-credentials
+      default: s3-aws-crcqe-asia
+      description: |
+        ocp secret holding the s3 credentials. Secret should be accessible to this task.
+        ---
+        apiVersion: v1
+        kind: Secret
+        metadata:
+          name: XXXX
+          labels:
+            app.kubernetes.io/component: XXXX
+        type: Opaque
+        data:
+          download-url: ${download_url}  
+          upload-url: ${upload_url}  
+          bucket: ${bucket_value}  
+          access-key: ${access_key}
+          secret-key: ${secret_key}
+    - name: host-info
+      description: |
+        ocp secret holding the hsot info credentials. Secret should be accessible to this task.
+        ---
+        apiVersion: v1
+        kind: Secret
+        metadata:
+          name: XXXX
+          labels:
+            app.kubernetes.io/component: XXXX
+        type: Opaque
+        data:
+          host: XXXX
+          username: XXXX
+          password: XXXX
+          id_rsa: XXXX
+          platform: XXXX
+          os-version: XXXX
+          arch: XXXX
+          os: XXXX
+    # Manage task params
+    - name: os
+      description: valid values are macos and windows
+    # SCM params
+    - name: crc-scm
+      default: https://github.com/code-ready/crc.git
+    - name: crc-scm-ref 
+      default: main
+    - name: vfkit-scm-ref
+      default: "''"
+    - name: crc-scm-pr
+      default: "''"
+    # Target params
+    - name: s3-folder-path
+      default: 'crc-binaries'
+    # Control params
+    - name: debug
+      description: debug purposes extend verbosity on cmds executed on the target
+      default: 'false'
+
+  results:
+    - name: downloadable-base-url
+      description: base url where the installer and the shasumfile can be downloaded
+    - name: distributable-name
+      description: distributable file name for the installer
+    - name: shasumfile
+      description: shasumfile name 
+
+  steps:
+    - name: crc-executable-builder
+      # quay.io/crc-org/ci-crc-builder and v2.0.0-dev values should be passed to the template
+      image: quay.io/crc-org/ci-crc-builder:v2.0.0-dev-$(params.os)
+      volumeMounts:
+        - name: s3-credentials
+          mountPath: /opt/s3-credentials
+        - name: host-info
+          mountPath: /opt/host/
+      imagePullPolicy: Always
+      script: |
+          #!/bin/sh
+
+          # Prepare ENVs
+          SECONDS=0
+          DEBUG=$(params.debug)
+          TARGET_HOST=$(cat /opt/host/host)
+          TARGET_HOST_USERNAME=$(cat /opt/host/username)
+          cp /opt/host/id_rsa id_rsa
+          chmod 600 id_rsa
+          TARGET_HOST_KEY_PATH=id_rsa
+          TARGET_FOLDER=crc-builder
+          TARGET_CLEANUP='true'
+          
+          # Create cmd per OS
+          runner="run.sh"
+          if [[ $(params.os) == "windows" ]]; then
+            runner="run.ps1"
+          fi
+          cmd="${TARGET_FOLDER}/${runner} -crcSCM $(params.crc-scm) "
+          cmd+="-crcSCMRef $(params.crc-scm-ref) "
+          if [[ $(params.crc-scm-pr) != "" ]]; then
+            cmd+="-crcSCMPR $(params.crc-scm-pr) "
+          fi
+          if [[ $(params.vfkit-scm-ref) != "" ]]; then
+            cmd+="-vfkitSCMRef $(params.vfkit-scm-ref) "
+          fi
+          cmd+="-targetFolder ${TARGET_FOLDER} "
+          cmd+="-uploadPath $(cat /opt/s3-credentials/bucket)/$(params.s3-folder-path) "
+          cmd+="-datalakeURL $(cat /opt/s3-credentials/upload-url) "
+          cmd+="-datalakeAcessKey $(cat /opt/s3-credentials/access-key) "
+          cmd+="-datalakeSecretKey $(cat /opt/s3-credentials/secret-key) "
+
+          # Exec
+          . entrypoint.sh "${cmd}"
+          if [[ $? -ne 0 ]]; then 
+            exit 1
+          fi
+
+          echo -n "$(cat /opt/s3-credentials/download-url)/$(params.s3-folder-path)" \
+            | tee $(results.downloadable-base-url.path)
+          case "$(params.os)" in
+          macos|darwin)
+            echo -n "crc-macos-installer.pkg" | tee $(results.distributable-name.path)
+            echo -n "crc-macos-installer.pkg.sha256sum" | tee $(results.shasumfile.path)
+            ;;
+          windows)
+            echo -n "crc-windows-installer.zip" | tee $(results.distributable-name.path)
+            echo -n "crc-windows-installer.zip.sha256sum" | tee $(results.shasumfile.path)
+            ;;
+          *)
+            echo -n "" | tee $(results.distributable-name.path)
+            echo -n "" | tee $(results.shasumfile.path)
+            ;;
+          esac
+
+      resources:      
+        requests:
+          memory: 150Mi
+          cpu: 90m
+        limits:
+          memory: 270Mi
+          cpu: 150m
+      timeout: 90m
