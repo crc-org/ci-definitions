@@ -1,0 +1,266 @@
+apiVersion: tekton.dev/v1beta1
+kind: Pipeline
+metadata:
+  name: macadam-e2e-baremetal
+spec:
+  params:
+    - name: revision
+      type: string
+      default: "main"
+      description: |
+        if test a PR, the value set to refs/pull/<PR-number>/head
+    - name: OS
+      default: "linux"
+    - name: ARCH
+      default: "amd64"
+    - name: test-machine
+    - name: image-url
+      default: "''"
+    - name: e2e-tag
+      default: "''"
+    - name: s3-bucket
+      default: "crcqe-asia"
+    - name: s3-path
+
+  tasks:
+    - name: correlate
+      taskSpec:
+        description: This task will create some correlate info as base for a execution
+        volumes:
+          - name: pipelines-data
+            persistentVolumeClaim:
+              claimName: pipelines-data
+        results:
+          - name: correlation
+            description: correlation number to be used along the pipeline
+          - name: date 
+            description: includes current date
+          - name: workspace-resources-path
+            description: path created as isolation for an execution within the workspace
+        steps:
+          - name: gather-data
+            image: registry.access.redhat.com/ubi8/ubi-minimal
+            volumeMounts:
+              - name: pipelines-data
+                mountPath: /opt/storage
+            script: |
+              #!/bin/sh
+              DATE=$(date +'%Y%m%d')
+              CORRELATION="${DATE}-${RANDOM}"
+              
+              echo -n "$DATE" > $(results.date.path)
+              echo -n "$CORRELATION" > $(results.correlation.path)
+              
+              # run path on workspace
+              run_path=$CORRELATION
+              workspace_path=/opt/storage/${run_path}
+              mkdir -p "${workspace_path}"
+              chmod 777 "${workspace_path}"
+              echo -n ${run_path} | tee $(results.workspace-resources-path.path)
+    
+    - name: start-build
+      taskSpec:
+        description: this task will build the macadam e2e image
+        results:
+            - name: IMAGE_URL
+              description: "The full URL of the newly built image"
+            - name: IMAGE_DIGEST
+              description: "The digest of the newly built image"
+
+        params:
+          - name: revision
+          - name: OS
+          - name: ARCH
+        steps:
+          - name: start-build
+            image: quay.io/openshift/origin-cli:4.14
+            script: |
+              #!/bin/sh
+
+              BUILD_ID=$(oc start-build macadam-e2e-test \
+                --commit="$(params.revision)" \
+                --env="OS=$(params.OS)" \
+                --env="ARCH=$(params.ARCH)" \
+                --wait -o name)
+              echo "buildID: ${BUILD_ID}"
+              oc logs $BUILD_ID
+
+              BUILD_STATUS=$(oc get $BUILD_ID -o jsonpath='{.status.phase}')
+              if [ "$BUILD_STATUS" != "Complete" ]; then
+                  echo "Failed to build, status: $BUILD_STATUS"
+                  echo "Dumping build logs:"
+                  oc logs $BUILD_ID
+                  exit 1
+              fi
+
+              IMAGE_SHA=$(oc get $BUILD_ID -o jsonpath='{.status.output.to.imageDigest}')
+              echo "IMAGE_SHA: ${IMAGE_SHA}"
+
+              #echo "Full image URL: ${FULL_IMAGE_URL}"
+
+              # Write the full URL to the result, not the short name
+              echo -n "image-registry.openshift-image-registry.svc:5000/devtoolsqe--pipeline/macadam-e2e@${IMAGE_SHA}" > $(results.IMAGE_URL.path)
+
+              echo -n ${IMAGE_SHA} > $(results.IMAGE_DIGEST.path)
+      params:
+        - name: revision
+          value: $(params.revision)
+        - name: OS
+          value: $(params.OS)
+        - name: ARCH
+          value: $(params.ARCH)
+
+    - name: wait-for-image
+      runAfter: 
+        - start-build
+      params:
+        - name: image-name
+          value: $(tasks.start-build.results.IMAGE_URL)
+        - name: correlate
+          value: $(tasks.correlate.results.correlation)
+      taskSpec:
+        volumes:
+          - name: pipelines-data
+            persistentVolumeClaim:
+              claimName: pipelines-data
+        params:
+          - name: image-name
+          - name: correlate
+        steps:
+          - name: check-is-ready
+            image: quay.io/openshift/origin-cli:4.14
+            volumeMounts:
+              - name: pipelines-data
+                mountPath: /opt/storage
+            script: |
+              #!/usr/bin/env bash
+              set -e 
+              IMAGE=$(params.image-name)
+              echo "Checking if image is pullable: $IMAGE"
+
+              POD_NAME=image-test-$(params.correlate)
+
+              for attempt in {1..30}; do
+                  echo "Attempt $attempt: creating pod to test image"
+
+                  # Create a pod to test image pull
+                  oc run $POD_NAME \
+                    --restart=Never \
+                    --image=$IMAGE \
+                    --overrides='
+                      {
+                        "spec": {
+                          "serviceAccountName": "pipeline"
+                        }
+                      }' \
+                    --command -- sleep 60
+
+                  # Wait for pod to reach a final state
+                  for wait in {1..30}; do
+                      STATUS=$(oc get pod $POD_NAME -o jsonpath='{.status.phase}')
+                      echo "  Wait $wait: Pod status = $STATUS"
+
+                      if [[ "$STATUS" == "Running" || "$STATUS" == "Succeeded" ]]; then
+                          echo "✅ Image is fully pullable and pod is running"
+                          oc delete pod $POD_NAME --ignore-not-found
+                          exit 0
+                      elif [[ "$STATUS" == "Failed" || "$STATUS" == "Unknown" ]]; then
+                          echo "❌ Pod failed, image not pullable yet"
+                          oc delete pod $POD_NAME --ignore-not-found
+                          break
+                      fi
+
+                      sleep 5
+                  done
+                  oc delete pod $POD_NAME --ignore-not-found
+                  # Wait before next attempt
+                  sleep 60
+              done
+
+              echo "❌ Image not pullable after 30 attempts"
+              exit 1
+              
+    - name: macadam-test
+      runAfter: 
+        - wait-for-image
+        - correlate
+      taskRef:
+        resolver: git
+        params:
+          - name: url
+            #value: https://github.com/crc-org/ci-definitions
+            value: https://github.com/lilyLuLiu/ci-definitions
+          - name: revision
+            value: main
+          - name: pathInRepo
+            value: macadam-test/e2e-task.yaml
+      params:
+        - name: image-url
+          value: $(params.image-url)
+        - name: e2e-image
+          value: $(tasks.start-build.results.IMAGE_URL)
+        - name: secret-host
+          value: $(params.test-machine)
+        - name: os
+          value: $(params.OS)
+        - name: e2e-tag
+          value: $(params.e2e-tag)
+        - name: workspace-resources-path
+          value: $(tasks.correlate.results.workspace-resources-path)
+    - name: s3-upload-results
+      runAfter:
+        - macadam-test
+      taskRef:
+        resolver: git
+        params:
+          - name: url
+            value: https://github.com/crc-org/ci-definitions
+          - name: revision
+            value: main
+          - name: pathInRepo
+            value: s3-uploader/tkn/task.yaml
+      params:
+        - name: aws-credentials
+          value: aws-crcqe-bot
+        - name: pvc
+          value: pipelines-data
+        - name: ws-output-path
+          value: $(tasks.correlate.results.correlation)
+        - name: qe-workspace-subpath
+          value: results
+        - name: s3-bucket
+          value: $(params.s3-bucket)
+        - name: s3-path
+          value: $(params.s3-path)
+    
+  finally:
+    - name: reportportal-import
+      taskRef:
+        resolver: git 
+        params:
+        - name: url
+          value: https://github.com/crc-org/ci-definitions
+        - name: revision
+          value: main
+        - name: pathInRepo
+          value: reportportal/tkn/import.yaml
+      params:
+        - name: secret-reportportal
+          value: reportportal-macadam
+        - name: pvc
+          value: pipelines-data
+        - name: results-id
+          value: macadam-$(params.OS)-$(params.ARCH) 
+        - name: results-wsstorage-path
+          value: "$(tasks.correlate.results.workspace-resources-path)/results"
+        - name: upload-log
+          value: 'true'
+        - name: launch-attributes
+          value: |
+            {"attributes":[{"key":"test-machine","value":"$(params.test-machine)"},{"key":"revision","value":"$(params.revision)"},{"key": "skippedIssue", "value": true}]}
+        - name: launch-description
+          value: $(params.image-url)
+        - name: pipelinerunName
+          value: $(context.pipelineRun.name)
+      timeout: "15m"  
+

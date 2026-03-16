@@ -1,0 +1,40 @@
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: macadam-e2e
+spec:
+  lookupPolicy:
+    local: true # Allows the cluster to resolve "macadam-e2e:tag" without the full URL
+---
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: macadam-e2e-test
+spec:
+  failedBuildsHistoryLimit: 1
+  successfulBuildsHistoryLimit: 6
+  source:
+    type: Git
+    git:
+      uri: "https://github.com/crc-org/macadam"
+      ref: main
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: "test/image/Containerfile"
+      buildArgs:
+        - OS: "linux"
+        - ARCH: "amd64"
+  output:
+    to:
+      kind: ImageStreamTag
+      name: "macadam-e2e:latest"
+  resources:
+    limits:
+      memory: "4Gi"
+      cpu: "2"
+    requests:
+      memory: "2Gi"
+      cpu: "1"
+  triggers:
+    - type: ConfigChange

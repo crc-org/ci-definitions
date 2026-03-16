@@ -1,0 +1,71 @@
+---
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: macadam-e2e-test
+spec:
+  description: >-
+    this task will run e2e test of macadam on a remote target host.
+  volumes:
+    - name: host-secret
+      secret:
+        secretName: $(params.secret-host)
+    - name: storage
+      persistentVolumeClaim:
+        claimName: $(params.pvc)
+  params:
+    - name: pvc
+      default: pipelines-data
+    - name: e2e-image
+    - name: image-url
+      default: "''"
+    - name: image-location
+      default: "''"
+    - name: secret-host
+    - name: os
+    - name: arch
+      default: "amd64"
+    - name: e2e-tag
+      default: "''"
+    - name: cleanup-target
+      default: "true"
+    - name: workspace-resources-path
+  steps:
+    - name: e2e
+      image: $(params.e2e-image)  
+      imagePullPolicy: IfNotPresent
+      volumeMounts:
+        - name: host-secret
+          mountPath: /opt/host
+        - name: storage
+          mountPath: /opt/testresult
+      env:
+        - name: OUTPUT_FOLDER
+          value: /opt/testresult/$(params.workspace-resources-path)
+      script: |
+        #!/bin/bash
+        set -o pipefail
+        set -x
+
+        TARGET_HOST=$(cat /opt/host/host)
+        TARGET_HOST_USERNAME=$(cat /opt/host/username)
+        cp /opt/host/id_rsa /opt/id_rsa
+        TARGET_HOST_KEY_PATH=/opt/id_rsa
+        chmod 600 ${TARGET_HOST_KEY_PATH}
+
+        TARGET_FOLDER=macadam-test
+        TARGET_RESULTS=results 
+        TARGET_CLEANUP=$(params.cleanup-target)
+
+        # Create output folder
+        mkdir -p "${OUTPUT_FOLDER}"
+
+        # Create cmd per OS
+        runner="run.sh"
+        if [[ $(params.os) == "windows" ]]; then
+          runner="run.ps1"
+        fi
+        cmd="${TARGET_FOLDER}/${runner} -imageLocation $(params.image-location) -imageUrl $(params.image-url) -ginkgoLabelFilter $(params.e2e-tag)"
+
+        # Exec
+        . entrypoint.sh "${cmd}"
