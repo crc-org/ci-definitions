@@ -27,7 +27,6 @@ spec:
       secret: 
         secretName: $(params.pull-secret)
     - name: storage
-      description: storage volume where to find the results to be imported
       persistentVolumeClaim:
         claimName: $(params.pvc)
     - name: quay-credential
