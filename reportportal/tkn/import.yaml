@@ -4,7 +4,7 @@ kind: Task
 metadata:
   name: reportportal-import
   labels:
-    app.kubernetes.io/version: "v1.0.0"
+    app.kubernetes.io/version: "v0.9.0"
   annotations:
     tekton.dev/pipelines.minVersion: "0.24.x"
     tekton.dev/categories: data
@@ -65,7 +65,7 @@ spec:
 
   steps:
   - name: import
-    image: quay.io/crc-org/reportportal:v1.0.0 #v0.0.5
+    image: quay.io/crc-org/reportportal:v0.9.0 #v0.0.5
     imagePullPolicy: Always
     volumeMounts:
       - name: reportportal-credentials

@@ -51,7 +51,7 @@ spec:
     description: debug the task cmds
     default: 'false' 
   - name: upload-log
-    default: 'false'
+    default: 'true'
     description: |
       whether upload the current pipelinerun logs. 
       If true, the task will gather current pipeline-run logs to xml, then upload to reportportal.
@@ -59,6 +59,9 @@ spec:
   - name: pipelinerunName
     default: $(context.pipelineRun.name)
     description: the pipelinerun name which log be uploaded to reportportal 
+  - name: remove-PVC-folder
+    default: 'true'
+    description: Remove the folder in PVC after import to reportportal
 
   steps:
   - name: import
@@ -78,20 +81,6 @@ spec:
         set -exuo pipefail
       fi
 
-      if [[ $(params.upload-log) == 'true' ]]; then
-        echo $(params.pipelinerunName)
-        tkn pipelinerun list | grep $(params.pipelinerunName)
-        if [[ $? == 0 ]]; then
-          tkn pipelinerun logs $(params.pipelinerunName) > pipelinerun.log
-          logPath=pipelinerun.log
-          xmlPath=pipelineLog.xml
-          python3 /opt/trans-log-xml.py $logPath $xmlPath
-          ls -lh
-        else 
-          echo "no pipelinerun $(params.pipelinerunName) found"
-        fi
-      fi
-
       failFlag='false'
       
       # remove the xml file if its size is 0 byte
@@ -104,6 +93,28 @@ spec:
         failFlag='true'
       fi
 
+      if [[ $(params.upload-log) == 'true' ]]; then
+        echo $(params.pipelinerunName)
+        tkn pipelinerun list | grep $(params.pipelinerunName)
+        if [[ $? == 0 ]]; then
+          xmlPath=pipelineLog.xml
+          child_references=$(tkn pipelinerun describe $(params.pipelinerunName) -o json | jq -r '.status.childReferences[].name')
+          testcases_json='{}'
+          for child_reference in $child_references; do
+            taskrun_status=$(tkn taskrun describe $child_reference -o json | jq -r '.status.conditions[].status')
+            if [[ $taskrun_status == 'Unknown' ]]; then
+              continue
+            fi
+            tkn taskrun logs $child_reference > task_logs.txt
+            testcases_json=$(echo "$testcases_json" | jq --arg name "$child_reference" --arg status "$taskrun_status" --rawfile logs task_logs.txt '. + {($name): {"status": $status, "logs": $logs}}')
+          done
+          echo "$testcases_json" > payload.json
+          python3 /create-junit-file.py payload.json $xmlPath $failFlag
+          ls -lh
+        else
+          echo "no pipelinerun $(params.pipelinerunName) found"
+        fi
+      fi
 
       # Compress
       if [[ $failFlag == 'true' ]]; then
@@ -149,11 +160,13 @@ spec:
       fi
 
       # delete the folder in pvc
-      path=$(params.results-wsstorage-path)
-      IFS='/' read -ra folder <<< "$path"
-      if [ -d "/opt/storage/$folder" ]; then
-        ls /opt/storage/$folder
-        rm -r /opt/storage/$folder
+      if [[ $(params.remove-PVC-folder) == "true" ]]; then
+        path=$(params.results-wsstorage-path)
+        IFS='/' read -ra folder <<< "$path"
+        if [ -d "/opt/storage/$folder" ]; then
+          ls /opt/storage/$folder
+          rm -r /opt/storage/$folder
+        fi
       fi
 
     resources:      
@@ -166,11 +179,8 @@ spec:
 
   volumes:
     - name: storage
-      description: storage volume where to find the results to be imported
       persistentVolumeClaim:
         claimName: $(params.pvc)
     - name: reportportal-credentials
       secret:
         secretName: $(params.secret-reportportal)
-    
-    
