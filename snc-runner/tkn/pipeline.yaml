@@ -119,7 +119,7 @@ spec:
         resolver: bundles
         params:
           - name: bundle
-            value: quay.io/redhat-developer/mapt:v0.9.9-tkn
+            value: quay.io/redhat-developer/mapt:v0.12.1-tkn
           - name: name
             value: infra-aws-rhel
           - name: kind
@@ -264,7 +264,7 @@ spec:
         resolver: bundles
         params:
           - name: bundle
-            value: quay.io/redhat-developer/mapt:v0.9.9-tkn
+            value: quay.io/redhat-developer/mapt:v0.12.1-tkn
           - name: name
             value: infra-aws-rhel
           - name: kind
@@ -318,7 +318,7 @@ spec:
                   resolver: bundles
                   params:
                     - name: bundle
-                      value: quay.io/redhat-developer/mapt:v0.9.9-tkn
+                      value: quay.io/redhat-developer/mapt:v0.12.1-tkn
                     - name: pathInRepo
                       value: tkn/infra-aws-rhel.yaml
                     - name: kind
