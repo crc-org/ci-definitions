@@ -5,6 +5,7 @@ source "${SCRIPT_DIR}/lib.sh"
 
 # Parameters
 aBaseURL=''
+aBaseURLFallback=''
 aName=''
 aSHAName='sha256sum.txt'
 targetPath=''
@@ -17,6 +18,11 @@ delete='false'
 while [[ $# -gt 0 ]]; do
     key="$1"
     case $key in
+        -aBaseURLFallback)
+        aBaseURLFallback="$2"
+        shift
+        shift
+        ;;
         -aBaseURL)
         aBaseURL="$2"
         shift 
@@ -79,6 +85,18 @@ download () {
     done
 }
 
+download_check () {
+    local name="$1"
+    local base="$2"
+    local sha="$3"
+
+    # Required to download
+    rm -f $name
+    dURL="$base/$name"
+    download $dURL
+    check_download $name $sha
+}
+
 ##############
 #### MAIN ####
 ##############
@@ -104,17 +122,24 @@ if [[ $download == "true" ]]; then
     # Check if require download
     required_download $aName $aSHAName
     if [[ ${?} -ne 0 ]]; then
-        # Required to download
-        rm -f $aName
-        dURL="$aBaseURL/$aName"
-        download $dURL
-        check_download $aName $aSHAName
-        if [[ ${?} -ne 0 ]]; then 
+        local doExit=0
+        download_check "$aName" "$aBaseURL" "$aSHAName"
+        if [[ ${?} -ne 0 ]]; then
+            doExit=1
+            if [[ ${aBaseURLFallback} != '' ]]; then
+                doExit=0
+                echo "Error with downloading $aName, using fallback"
+                download_check "$aName" "$aBaseURLFallback" "$aSHAName"
+                if [[ ${?} -ne 0 ]]; then
+                    doExit=1
+                fi
+            fi
+        fi
+        if [[ ${doExit} -eq 1 ]]; then
             echo "Error with downloading $aName"
             exit 1
         fi
     fi
-
 fi
 
 # INSTALLATION
