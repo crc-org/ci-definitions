@@ -103,7 +103,10 @@ spec:
       default: e2e-junit.xml
     - name: e2e-custom-memory
       description: If we want to customize the base memory to run the e2e we can set this value
-      default: "''"  
+      default: "''"
+    - name: e2e-custom-disk
+      description: If we want to customize the disk size to run the e2e we can set this value
+      default: "''"
     - name: e2e-cleanup-target
       description: To cleanup remote folder after running e2e
       default: "true"  
@@ -111,8 +114,14 @@ spec:
       description: Control if integration tests are executed. (true or false)
       default: 'true'
     - name: integration-tag
-      description: tags to select integration scenarios. Default empty values which means all scnearios  
-      default: "''"  
+      description: tags to select integration scenarios. Default empty values which means all scnearios
+      default: "''"
+    - name: integration-custom-memory
+      description: If we want to customize the base memory to run the integration we can set this value
+      default: "''"
+    - name: integration-custom-disk
+      description: If we want to customize the disk size to run the integration we can set this value
+      default: "''"
     - name: integration-timeout
       description: total timeout for run integration suite
       default: "90m"  
@@ -198,6 +207,9 @@ spec:
           fi
           if [[ $(params.e2e-custom-memory) != "" ]]; then
             cmd="$cmd -crcMemory $(params.e2e-custom-memory) "
+          fi
+          if [[ $(params.e2e-custom-disk) != "" ]]; then
+            cmd="$cmd -crcDiskSize $(params.e2e-custom-disk) "
           fi
         
           # Exec
@@ -292,6 +304,12 @@ spec:
           fi
           if [[ "$(params.integration-tag)" != "" ]]; then
             cmd="$cmd -labelFilter '$(params.integration-tag)' "
+          fi
+          if [[ $(params.integration-custom-memory) != "" ]]; then
+            cmd="$cmd -crcMemory $(params.integration-custom-memory) "
+          fi
+          if [[ $(params.integration-custom-disk) != "" ]]; then
+            cmd="$cmd -crcDiskSize $(params.integration-custom-disk) "
           fi
           
           # Exec
