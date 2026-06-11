@@ -101,6 +101,18 @@ spec:
     - name: integration-timeout
       description: total timeout for run integration suite
       default: "120m"
+    - name: e2e-custom-memory
+      description: If we want to customize the base memory to run the e2e we can set this value
+      default: "''"
+    - name: e2e-custom-disk
+      description: If we want to customize the disk size to run the e2e we can set this value
+      default: "''"
+    - name: integration-custom-memory
+      description: If we want to customize the base memory to run the integration we can set this value
+      default: "''"
+    - name: integration-custom-disk
+      description: If we want to customize the disk size to run the integration we can set this value
+      default: "''"
 
     # Control
     - name: debug
@@ -469,9 +481,17 @@ spec:
         value: $(params.target-cleanup) 
       - name: integration-timeout
         value: $(params.integration-timeout)
+      - name: e2e-custom-memory
+        value: $(params.e2e-custom-memory)
+      - name: e2e-custom-disk
+        value: $(params.e2e-custom-disk)
+      - name: integration-custom-memory
+        value: $(params.integration-custom-memory)
+      - name: integration-custom-disk
+        value: $(params.integration-custom-disk)
       - name: debug
         value: $(params.debug)
-      timeout: "5h" 
+      timeout: "5h"
     - name: s3-upload-results
       runAfter:
       - qe
