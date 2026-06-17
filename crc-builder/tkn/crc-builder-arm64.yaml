@@ -133,10 +133,10 @@ spec:
         
       resources:      
         requests:
-          memory: "200Mi"
+          memory: "1Gi"
           cpu: "100m"
         limits:
-          memory: "1000Mi"
+          memory: "2Gi"
           cpu: "400m"
     - name: build
       # quay.io/crc-org/ci-crc-builder and v1.1.2 values should be passed to the template
