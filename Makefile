@@ -33,20 +33,16 @@ snc-runner-oci-save:
 snc-runner-oci-load:
 	${CONTAINER_MANAGER} load -i $(SNC_RUNNER_SAVE).tar 
 
+snc-runner-oci-push: IMAGE ?= $(SNC_RUNNER):$(SNC_RUNNER_V)
 snc-runner-oci-push:
-ifndef IMAGE
-	IMAGE = $(SNC_RUNNER):$(SNC_RUNNER_V)
-endif
 	${CONTAINER_MANAGER} push $(IMAGE)
 
 snc-runner-tkn-create:
 	$(call tkn_template,$(SNC_RUNNER),$(SNC_RUNNER_V),snc-runner,task)
 	$(call tkn_template,$(SNC_RUNNER),$(SNC_RUNNER_V),snc-runner,pipeline)
 
+snc-runner-tkn-push: IMAGE ?= $(SNC_RUNNER):$(SNC_RUNNER_V)
 snc-runner-tkn-push: install-out-of-tree-tools
-ifndef IMAGE
-	IMAGE = $(SNC_RUNNER):$(SNC_RUNNER_V)
-endif
 	$(TOOLS_BINDIR)/tkn bundle push $(IMAGE)-tkn \
 		-f snc-runner/tkn/task.yaml \
 		-f snc-runner/tkn/pipeline.yaml
@@ -99,13 +95,11 @@ crc-builder-tkn-create:
 	$(call tkn_template,$(CRC_BUILDER),$(CRC_BUILDER_V),crc-builder,crc-builder)
 	$(call tkn_template,$(CRC_BUILDER),$(CRC_BUILDER_V),crc-builder,crc-builder-arm64)
 
+crc-builder-tkn-push: IMAGE ?= $(CRC_BUILDER):$(CRC_BUILDER_V)
 crc-builder-tkn-push: install-out-of-tree-tools
-ifndef IMAGE
-	IMAGE = $(CRC_BUILDER):$(CRC_BUILDER_V)
-endif
 	$(TOOLS_BINDIR)/tkn bundle push $(IMAGE)-tkn \
 		-f crc-builder/tkn/crc-builder-installer.yaml \
-		-f crc-builder/tkn/crc-builder.yaml \ 
+		-f crc-builder/tkn/crc-builder.yaml \
 		-f crc-builder/tkn/crc-builder-arm64.yaml
 
 #### crc-support ####
@@ -144,10 +138,8 @@ crc-support-oci-push:
 crc-support-tkn-create:
 	$(call tkn_template,$(CRC_SUPPORT),$(CRC_SUPPORT_V),crc-support,task)
 
+crc-support-tkn-push: IMAGE ?= $(CRC_SUPPORT):$(CRC_SUPPORT_V)
 crc-support-tkn-push: install-out-of-tree-tools
-ifndef IMAGE
-	IMAGE = $(CRC_SUPPORT):$(CRC_SUPPORT_V)
-endif
 	$(TOOLS_BINDIR)/tkn bundle push $(IMAGE)-tkn \
 		-f crc-support/tkn/task.yaml
 
