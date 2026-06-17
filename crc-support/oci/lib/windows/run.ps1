@@ -1,6 +1,6 @@
 param(
-    [Parameter(HelpMessage='download base url')]
-    $aBaseURL,
+    [Parameter(HelpMessage='download base urls, comma separated for fallback')]
+    $aBaseURLs,
     [Parameter(HelpMessage='asset name to be downloaded')]
     $aName,
     [Parameter(HelpMessage='shasumFile file name Default value: sha256sum.txt')]
@@ -55,7 +55,16 @@ function Check-Download() {
     $hashValue=Get-FileHash $aName | Select-Object -ExpandProperty Hash
     $hashMatch=Select-String $aSHAName -Pattern $hashValue -Quiet
     return $hashMatch
-} 
+}
+
+function Download-Check ($baseURL) {
+    if (Test-Path $aName) {
+        Remove-Item $aName
+    }
+    $distributableURL="$baseURL/$aName"
+    Download $distributableURL
+    return Check-Download
+}
 
 function Pause-Until-Other-Installations-Finish() {
     do {
@@ -93,19 +102,30 @@ pushd $targetPath
 
 # DOWNLOAD
 if ($download) {
-    # Download sha256sum
-    curl.exe --insecure -LO "$aBaseURL/$aSHAName"
+    Write-Host "downloading $aName"
+    $urls = $aBaseURLs -split ','
+
+    # Download sha256sum from first available URL
+    foreach ($url in $urls) {
+        curl.exe --insecure -LO "$url/$aSHAName"
+        if ($?) { break }
+        Write-Host "Failed to get shasum from $url, trying next..."
+    }
+
     # Check if require download
     if (Require-Download $targetPath) {
-        if (Test-Path $aName) {
-            Remove-Item $aName
+        $downloaded = $false
+        foreach ($url in $urls) {
+            $check = Download-Check $url
+            if ($check) {
+                $downloaded = $true
+                break
+            }
+            Write-Host "Error downloading $aName from $url, trying next..."
         }
-        $distributableURL="$aBaseURL/$aName"
-        Download $distributableURL
-        $check=Check-Download
-        if (!$check) {
+        if (!$downloaded) {
             popd
-            Write-Host "Error with downloaded binary"
+            Write-Host "Error downloading $aName from all URLs"
             Exit
         }
     }
