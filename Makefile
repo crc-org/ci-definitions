@@ -83,9 +83,9 @@ crc-builder-oci-push: MANIFEST=$(CRC_BUILDER):$(CRC_BUILDER_V)
 crc-builder-oci-push:
 	${CONTAINER_MANAGER} push $(MANIFEST)-linux-arm64
 	${CONTAINER_MANAGER} push $(MANIFEST)-linux-amd64
-	${CONTAINER_MANAGER} manifest create $(MANIFEST)-linux
-	${CONTAINER_MANAGER} manifest add $(MANIFEST)-linux docker://$(MANIFEST)-linux-arm64
-	${CONTAINER_MANAGER} manifest add $(MANIFEST)-linux docker://$(MANIFEST)-linux-amd64
+	${CONTAINER_MANAGER} manifest create --amend $(MANIFEST)-linux
+	${CONTAINER_MANAGER} manifest add --all $(MANIFEST)-linux docker://$(MANIFEST)-linux-arm64
+	${CONTAINER_MANAGER} manifest add --all $(MANIFEST)-linux docker://$(MANIFEST)-linux-amd64
 	${CONTAINER_MANAGER} manifest push --all $(MANIFEST)-linux
 	${CONTAINER_MANAGER} push $(MANIFEST)-windows
 	${CONTAINER_MANAGER} push $(MANIFEST)-darwin
