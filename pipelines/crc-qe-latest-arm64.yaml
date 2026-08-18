@@ -141,7 +141,7 @@ spec:
           - name: url
             value: https://github.com/crc-org/ci-definitions
           - name: revision
-            value: crc-builder-v1.1.3
+            value: workaround-fedora43-location
           - name: pathInRepo
             value: crc-builder/tkn/crc-builder-arm64.yaml
       params:
