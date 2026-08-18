@@ -125,7 +125,7 @@ spec:
         cmd="mapt azure fedora create --project-name fedora "
         cmd+="--backed-url file://${workspace_path} "
         cmd+="--conn-details-output ${workspace_path} "
-        cmd+="--arch arm64 --cpus $(params.builder-cpus) --memory $(params.builder-memory) --spot --spot-eviction-tolerance low "
+        cmd+="--arch arm64 --cpus $(params.builder-cpus) --memory $(params.builder-memory) --version 43 --spot --spot-eviction-tolerance low "
         eval "${cmd}"
         if [[ $? -ne 0 ]]; then 
           exit 1
