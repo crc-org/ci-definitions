@@ -74,10 +74,29 @@ spec:
         mountPath: /opt/storage
     script: |
       #!/bin/sh
-      set -x
+
+      # Function to mask credentials (show first and last char, hide middle)
+      mask_credential() {
+        local cred="$1"
+        local len=${#cred}
+        if [ $len -le 2 ]; then
+          echo "***"
+        else
+          echo "${cred:0:1}***${cred: -1}"
+        fi
+      }
+
+      # Load credentials before enabling debug mode
+      url=$(cat /opt/reportportal-credentials/url)
+      token=$(cat /opt/reportportal-credentials/token)
+      project=$(cat /opt/reportportal-credentials/project)
 
       # If debug add verbosity
       if [[ $(params.debug) == "true" ]]; then
+        echo "ReportPortal credentials (masked):"
+        echo "  url=${url}"
+        echo "  project=${project}"
+        echo "  token=$(mask_credential "$token")"
         set -exuo pipefail
       fi
 
@@ -124,10 +143,7 @@ spec:
       fi
 
       zip "$fileName.zip" *.xml
-      # Import
-      url=$(cat /opt/reportportal-credentials/url)
-      token=$(cat /opt/reportportal-credentials/token)
-      project=$(cat /opt/reportportal-credentials/project)
+      # Import (credentials already loaded at start of script)
       description=""
       if [[ $failFlag != 'true' ]]; then
         description="$(params.launch-description)"
