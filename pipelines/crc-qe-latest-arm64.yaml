@@ -29,8 +29,8 @@ spec:
     - name: az-credentials
       default: az-crcqe-bot
     # Existing components
-    - name: bundle-base-url
-      description: base url to download bundle and shasumsfile
+    - name: bundle-base-urls
+      description: comma-separated list of base urls to try in order for downloading bundle
     - name: bundle-name
       description: bundle name
     - name: bundle-shasumfile
@@ -262,8 +262,8 @@ spec:
       params:
         - name: secret-host
           value: $(tasks.provision-tester.results.host-access-secret)
-        - name: asset-base-url
-          value: $(params.bundle-base-url) 
+        - name: asset-base-urls
+          value: $(params.bundle-base-urls)
         - name: asset-name
           value: $(params.bundle-name)
         - name: asset-shasum-name

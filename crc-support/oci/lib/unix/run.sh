@@ -4,7 +4,7 @@ SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 source "${SCRIPT_DIR}/lib.sh"
 
 # Parameters
-aBaseURL=''
+aBaseURLs=''
 aName=''
 aSHAName='sha256sum.txt'
 targetPath=''
@@ -17,8 +17,8 @@ delete='false'
 while [[ $# -gt 0 ]]; do
     key="$1"
     case $key in
-        -aBaseURL)
-        aBaseURL="$2"
+        -aBaseURLs)
+        aBaseURLs="$2"
         shift 
         shift 
         ;;
@@ -79,6 +79,17 @@ download () {
     done
 }
 
+download_check () {
+    local name="$1"
+    local base="$2"
+    local sha="$3"
+
+    rm -f $name
+    dURL="$base/$name"
+    download $dURL
+    check_download $name $sha
+}
+
 ##############
 #### MAIN ####
 ##############
@@ -97,24 +108,37 @@ pushd $targetPath
 
 # DOWNLOAD
 if [[ $download == "true" ]]; then
-    echo "downlading $aName"
-    
-    # Download sha256sum
-    curl --insecure -LO "$aBaseURL/$aSHAName"
-    # Check if require download
+    echo "downloading $aName"
+
+    oldIFS="$IFS"
+    IFS=','
+
+    for url in $aBaseURLs; do
+        curl --insecure -LO "$url/$aSHAName" && break
+        echo "Failed to get shasum from $url, trying next..."
+    done
+
+    IFS="$oldIFS"
     required_download $aName $aSHAName
     if [[ ${?} -ne 0 ]]; then
-        # Required to download
-        rm -f $aName
-        dURL="$aBaseURL/$aName"
-        download $dURL
-        check_download $aName $aSHAName
-        if [[ ${?} -ne 0 ]]; then 
-            echo "Error with downloading $aName"
+        downloaded=false
+        IFS=','
+        for url in $aBaseURLs; do
+            IFS="$oldIFS"
+            download_check "$aName" "$url" "$aSHAName"
+            if [[ ${?} -eq 0 ]]; then
+                downloaded=true
+                break
+            fi
+            echo "Error downloading $aName from $url, trying next..."
+            IFS=','
+        done
+        IFS="$oldIFS"
+        if [[ "$downloaded" != "true" ]]; then
+            echo "Error downloading $aName from all URLs"
             exit 1
         fi
     fi
-
 fi
 
 # INSTALLATION

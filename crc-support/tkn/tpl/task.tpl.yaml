@@ -49,8 +49,8 @@ spec:
           arch: XXXX
           os: XXXX
     # Assets parameter
-    - name: asset-base-url
-      description: base url for the asset to be downloaded
+    - name: asset-base-urls
+      description: comma-separated list of base urls to try in order for downloading the asset
       default: "''"
     - name: asset-oras-address
       description: the oras address of the asset
@@ -189,7 +189,7 @@ spec:
 
 
       cmd="${TARGET_FOLDER}/${runner} -targetPath $tPath "
-      cmd+="-aBaseURL $(params.asset-base-url) "
+      cmd+="-aBaseURLs '$(params.asset-base-urls)' "
       cmd+="-aName $(params.asset-name) "
       cmd+="-aSHAName $(params.asset-shasum-name) "
       cmd+="-freshEnv $(params.force-fresh) "

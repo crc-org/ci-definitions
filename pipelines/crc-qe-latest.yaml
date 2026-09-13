@@ -65,8 +65,8 @@ spec:
     - name: s3-credentials
       default: s3-aws-crcqe-asia
     # Existing components
-    - name: bundle-base-url
-      description: base url to download bundle and shasumsfile
+    - name: bundle-base-urls
+      description: comma-separated list of base urls to try in order for downloading bundle
     - name: bundle-name
       description: bundle name
     - name: bundle-shasumfile
@@ -206,8 +206,8 @@ spec:
           value: $(params.secret-tester)
         - name: os
           value: $(tasks.init.results.os)
-        - name: asset-base-url
-          value: $(params.bundle-base-url)
+        - name: asset-base-urls
+          value: $(params.bundle-base-urls)
         - name: asset-name
           value: $(params.bundle-name)
         - name: asset-shasum-name
@@ -378,7 +378,7 @@ spec:
           value: $(params.secret-tester)
         - name: os
           value: $(tasks.init.results.os)
-        - name: asset-base-url
+        - name: asset-base-urls
           value: $(tasks.sync-build.results.asset-url)
         - name: asset-name
           value: $(tasks.sync-build.results.asset-name)
