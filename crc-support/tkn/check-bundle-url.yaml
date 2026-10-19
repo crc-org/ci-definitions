@@ -1,0 +1,65 @@
+---
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: check-bundle-url
+  labels:
+    app.kubernetes.io/version: "v2.0.0-dev"
+    redhat.com/product: openshift-local
+    dev.lifecycle.io/phase: testing
+  annotations:
+    tekton.dev/pipelines.minVersion: "0.44.x"
+    tekton.dev/categories: "openshift-local"
+    tekton.dev/tags: "openshift-local, testing"
+    tekton.dev/platforms: "linux/amd64"
+spec:
+  description: Select the first base URL where both the bundle and checksum file are available.
+  params:
+    - name: bundle-base-url
+      description: Primary bundle directory
+    - name: bundle-base-url-fallbacks
+      description: Alternative bundle directories, checked in order
+      type: array
+      default: []
+    - name: bundle-name
+    - name: bundle-shasumfile
+      default: sha256sum.txt
+  results:
+    - name: bundle-base-url
+      description: First available bundle directory
+  steps:
+    - name: check
+      image: registry.access.redhat.com/ubi9/ubi-minimal
+      args:
+        - "$(params.bundle-base-url)"
+        - "$(params.bundle-base-url-fallbacks[*])"
+      env:
+        - name: BUNDLE_NAME
+          value: $(params.bundle-name)
+        - name: BUNDLE_SHASUMFILE
+          value: $(params.bundle-shasumfile)
+      script: |
+        #!/bin/bash
+        set -eu
+
+        available() {
+          local status
+          status=$(curl --silent --show-error --fail --location --head \
+            --connect-timeout 10 --max-time 30 \
+            --output /dev/null --write-out '%{http_code}' "$1") || return 1
+          [[ "$status" == 200 ]]
+        }
+
+        for base_url in "$@"; do
+          base_url="${base_url%/}"
+          echo "Checking $base_url/$BUNDLE_NAME"
+          if available "$base_url/$BUNDLE_NAME" && \
+             available "$base_url/$BUNDLE_SHASUMFILE"; then
+            printf '%s' "$base_url" > "$(results.bundle-base-url.path)"
+            echo "Selected bundle source: $base_url"
+            exit 0
+          fi
+        done
+
+        echo "Bundle or checksum file unavailable at every configured URL" >&2
+        exit 1

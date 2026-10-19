@@ -62,6 +62,9 @@ jobs:
           if [[ ! -f crc-support/tkn/task.yaml ]]; then 
             exit 1
           fi
+          if [[ ! -f crc-support/tkn/check-bundle-url.yaml ]]; then
+            exit 1
+          fi
           # Check if version is in sync
 
       - name: Create k8s Kind Cluster
@@ -74,16 +77,10 @@ jobs:
       - name: Deploy tasks
         run: |
           kubectl apply -f crc-support/tkn/task.yaml
+          kubectl apply -f crc-support/tkn/check-bundle-url.yaml
 
       - name: Upload crc-support-tkn
         uses: actions/upload-artifact@v4
         with:
           name: crc-support-tkn
-          path: crc-support/tkn/task.yaml
-
-
-
-
-
-
-     
+          path: crc-support/tkn/*.yaml
