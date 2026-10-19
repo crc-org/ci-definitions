@@ -67,6 +67,10 @@ spec:
     # Existing components
     - name: bundle-base-url
       description: base url to download bundle and shasumsfile
+    - name: bundle-base-url-fallbacks
+      description: Ordered alternative base URLs when the bundle is unavailable at bundle-base-url
+      type: array
+      default: []
     - name: bundle-name
       description: bundle name
     - name: bundle-shasumfile
@@ -189,9 +193,30 @@ spec:
           value: $(params.bundle-name)
         - name: secret-runner
           value: $(params.secret-tester)
+    - name: check-bundle-url
+      taskRef:
+        resolver: git
+        params:
+          - name: url
+            value: https://github.com/crc-org/ci-definitions
+          - name: revision
+            value: main
+          - name: pathInRepo
+            value: crc-support/tkn/check-bundle-url.yaml
+      params:
+        - name: bundle-base-url
+          value: $(params.bundle-base-url)
+        - name: bundle-base-url-fallbacks
+          value:
+            - "$(params.bundle-base-url-fallbacks[*])"
+        - name: bundle-name
+          value: $(params.bundle-name)
+        - name: bundle-shasumfile
+          value: $(params.bundle-shasumfile)
     - name: download-bundle
       runAfter:
         - init
+        - check-bundle-url
       taskRef:
         resolver: git
         params:
@@ -207,7 +232,7 @@ spec:
         - name: os
           value: $(tasks.init.results.os)
         - name: asset-base-url
-          value: $(params.bundle-base-url)
+          value: $(tasks.check-bundle-url.results.bundle-base-url)
         - name: asset-name
           value: $(params.bundle-name)
         - name: asset-shasum-name
