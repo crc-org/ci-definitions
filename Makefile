@@ -137,11 +137,13 @@ crc-support-oci-push:
 
 crc-support-tkn-create:
 	$(call tkn_template,$(CRC_SUPPORT),$(CRC_SUPPORT_V),crc-support,task)
+	$(call tkn_template,$(CRC_SUPPORT),$(CRC_SUPPORT_V),crc-support,check-bundle-url)
 
 crc-support-tkn-push: IMAGE ?= $(CRC_SUPPORT):$(CRC_SUPPORT_V)
 crc-support-tkn-push: install-out-of-tree-tools
 	$(TOOLS_BINDIR)/tkn bundle push $(IMAGE)-tkn \
-		-f crc-support/tkn/task.yaml
+		-f crc-support/tkn/task.yaml \
+		-f crc-support/tkn/check-bundle-url.yaml
 
 #### s3-uploader ####
 
