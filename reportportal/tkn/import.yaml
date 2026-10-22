@@ -61,44 +61,50 @@ spec:
     description: the pipelinerun name which log be uploaded to reportportal 
   - name: remove-PVC-folder
     default: 'true'
-    description: Remove the folder in PVC after import to reportportal
+    description: Remove the folder in PVC on exit, including when an import fails
+  - name: secret-reportportal-secondary
+    default: reportportal-crc-secondary
+    description: Optional secondary credentials secret. An absent or empty secret skips the secondary import; a nonempty secret must contain url, token, and project.
 
   steps:
   - name: import
     image: quay.io/crc-org/reportportal:v1.0.0 #v0.0.5
     imagePullPolicy: Always
+    workingDir: /tmp
     volumeMounts:
       - name: reportportal-credentials
         mountPath: /opt/reportportal-credentials
+      - name: reportportal-secondary-credentials
+        mountPath: /opt/reportportal-secondary-credentials
+        readOnly: true
       - name: storage
         mountPath: /opt/storage
     script: |
-      #!/bin/sh
+      #!/usr/bin/env bash
 
-      # Function to mask credentials (show first and last char, hide middle)
-      mask_credential() {
-        local cred="$1"
-        local len=${#cred}
-        if [ $len -le 2 ]; then
-          echo "***"
-        else
-          echo "${cred:0:1}***${cred: -1}"
-        fi
-      }
-
-      # Load credentials before enabling debug mode
-      url=$(cat /opt/reportportal-credentials/url)
-      token=$(cat /opt/reportportal-credentials/token)
-      project=$(cat /opt/reportportal-credentials/project)
-
-      # If debug add verbosity
+      # Never enable shell tracing here: curl arguments contain the API token.
       if [[ $(params.debug) == "true" ]]; then
-        echo "ReportPortal credentials (masked):"
-        echo "  url=${url}"
-        echo "  project=${project}"
-        echo "  token=$(mask_credential "$token")"
-        set -exuo pipefail
+        echo "ReportPortal import debug mode enabled"
       fi
+
+      # Always clean up on exit, including failed imports, unless retention is requested.
+      cleanup_results() {
+        local import_status=$?
+        trap - EXIT
+        if [[ $(params.remove-PVC-folder) == "true" ]]; then
+          local path="$(params.results-wsstorage-path)"
+          local folder=${path%%/*}
+          if [[ -z "$folder" || "$folder" == "." || "$folder" == ".." ]]; then
+            echo "Unsafe results-wsstorage-path: $path" >&2
+            exit 1
+          fi
+          if [[ -d "/opt/storage/$folder" ]]; then
+            rm -r -- "/opt/storage/$folder" || exit 1
+          fi
+        fi
+        exit "$import_status"
+      }
+      trap cleanup_results EXIT
 
       failFlag='false'
       
@@ -142,49 +148,56 @@ spec:
         fileName=$(params.results-id)
       fi
 
-      zip "$fileName.zip" *.xml
-      # Import (credentials already loaded at start of script)
+      zip "$fileName.zip" *.xml || exit 1
       description=""
       if [[ $failFlag != 'true' ]]; then
         description="$(params.launch-description)"
       else
         description="$(params.results-id)"
       fi
-      upload=`curl -k -X POST "${url}/api/v1/plugin/${project}/junit/import" \
-          -H "accept: */*" -H "Content-Type: multipart/form-data" \
-          -H "Authorization: bearer ${token}" \
-          -F "file=@$fileName.zip" \
-          -F "launchImportRq={
-            \"attributes\": [
-              {
-                \"key\": \"skippedIsNotIssue\",
-                \"system\": true,
-                \"value\": \"true\"
-              }
-            ],
-            \"description\": \"${description}\"
-          };type=application/json"`
-      uuid=${upload#*\"id\":\"}
-      uuid=${uuid%%\"*}
-      getid=`curl -k -X GET "${url}/api/v1/${project}/launch/uuid/${uuid}" \
-          -H "accept: */*" -H  "Authorization: bearer ${token}"`
-      launchId=`echo $getid | jq .id`
-      if [[ $failFlag != 'true' ]]; then
-        curl -k -X PUT "${url}/api/v1/${project}/launch/${launchId}/update" \
-            -H "accept: */*" -H "Content-Type: application/json" \
-            -H "Authorization: bearer ${token}" \
-            -d '$(params.launch-attributes)'
-      fi
+      launch_request=$(jq -n --arg description "$description" \
+        '{attributes:[{key:"skippedIsNotIssue",system:true,value:"true"}],description:$description}')
 
-      # delete the folder in pvc
-      if [[ $(params.remove-PVC-folder) == "true" ]]; then
-        path=$(params.results-wsstorage-path)
-        IFS='/' read -ra folder <<< "$path"
-        if [ -d "/opt/storage/$folder" ]; then
-          ls /opt/storage/$folder
-          rm -r /opt/storage/$folder
+      import_launch() {
+        local credentials_dir="$1" target="$2"
+        local key url token project upload uuid launch_id
+        for key in url token project; do
+          if [[ ! -s "$credentials_dir/$key" ]]; then
+            echo "$target ReportPortal credentials are missing the $key key" >&2
+            return 1
+          fi
+        done
+        url=$(cat "$credentials_dir/url")
+        token=$(cat "$credentials_dir/token")
+        project=$(cat "$credentials_dir/project")
+        url=${url%/}
+
+        upload=$(curl -kfsS -X POST "$url/api/v1/plugin/$project/junit/import" \
+          -H "accept: application/json" \
+          -H "Authorization: bearer $token" \
+          -F "file=@$fileName.zip" \
+          -F "launchImportRq=$launch_request;type=application/json") || return 1
+        uuid=$(printf '%s' "$upload" | jq -er '.data.id // .id') || return 1
+        launch_id=$(curl -kfsS -X GET "$url/api/v1/$project/launch/uuid/$uuid" \
+          -H "Authorization: bearer $token" | jq -er '.id') || return 1
+        if [[ $failFlag != 'true' ]]; then
+          curl -kfsS -X PUT "$url/api/v1/$project/launch/$launch_id/update" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: bearer $token" \
+            -d '$(params.launch-attributes)' > /dev/null || return 1
         fi
+        echo "Imported $target ReportPortal launch $launch_id"
+      }
+
+      import_status=0
+      import_launch /opt/reportportal-credentials primary || import_status=1
+      secondary_credentials_dir=/opt/reportportal-secondary-credentials
+      if compgen -G "$secondary_credentials_dir/*" > /dev/null; then
+        import_launch "$secondary_credentials_dir" secondary || import_status=1
+      else
+        echo "Secondary ReportPortal secret is absent or empty; skipping import."
       fi
+      exit "$import_status"
 
     resources:      
       requests:
@@ -201,3 +214,7 @@ spec:
     - name: reportportal-credentials
       secret:
         secretName: $(params.secret-reportportal)
+    - name: reportportal-secondary-credentials
+      secret:
+        secretName: $(params.secret-reportportal-secondary)
+        optional: true
