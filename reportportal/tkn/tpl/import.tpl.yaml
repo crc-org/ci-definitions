@@ -59,6 +59,25 @@ spec:
   - name: pipelinerunName
     default: $(context.pipelineRun.name)
     description: the pipelinerun name which log be uploaded to reportportal 
+  - name: remove-PVC-folder
+    default: 'true'
+    description: Remove the folder in PVC after import to reportportal
+  - name: secret-reportportal-secondary
+    description: |
+      ocp secret holding the secondary report portal credentials. Secret should be accessible to this task.
+      If the secret does not exist the results are only imported to the main report portal.
+
+      ---
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: XXX
+      type: Opaque
+      data:
+        token: XXXX
+        url: XXXX
+        project: XXXX
+    default: reportportal-crc-secondary
 
   steps:
   - name: import
@@ -67,29 +86,36 @@ spec:
     volumeMounts:
       - name: reportportal-credentials
         mountPath: /opt/reportportal-credentials
+      - name: reportportal-secondary-credentials
+        mountPath: /opt/reportportal-secondary-credentials
       - name: storage
         mountPath: /opt/storage
     script: |
       #!/bin/sh
-      set -x
+
+      # Function to mask credentials (show first and last char, hide middle)
+      mask_credential() {
+        local cred="$1"
+        local len=${#cred}
+        if [ $len -le 2 ]; then
+          echo "***"
+        else
+          echo "${cred:0:1}***${cred: -1}"
+        fi
+      }
+
+      # Load credentials before enabling debug mode
+      url=$(cat /opt/reportportal-credentials/url)
+      token=$(cat /opt/reportportal-credentials/token)
+      project=$(cat /opt/reportportal-credentials/project)
 
       # If debug add verbosity
       if [[ $(params.debug) == "true" ]]; then
+        echo "ReportPortal credentials (masked):"
+        echo "  url=${url}"
+        echo "  project=${project}"
+        echo "  token=$(mask_credential "$token")"
         set -exuo pipefail
-      fi
-
-      if [[ $(params.upload-log) == 'true' ]]; then
-        echo $(params.pipelinerunName)
-        tkn pipelinerun list | grep $(params.pipelinerunName)
-        if [[ $? == 0 ]]; then
-          tkn pipelinerun logs $(params.pipelinerunName) > pipelinerun.log
-          logPath=pipelinerun.log
-          xmlPath=pipelineLog.xml
-          python3 /opt/trans-log-xml.py $logPath $xmlPath
-          ls -lh
-        else 
-          echo "no pipelinerun $(params.pipelinerunName) found"
-        fi
       fi
 
       failFlag='false'
@@ -104,6 +130,28 @@ spec:
         failFlag='true'
       fi
 
+      if [[ $(params.upload-log) == 'true' ]]; then
+        echo $(params.pipelinerunName)
+        tkn pipelinerun list | grep $(params.pipelinerunName)
+        if [[ $? == 0 ]]; then
+          xmlPath=pipelineLog.xml
+          child_references=$(tkn pipelinerun describe $(params.pipelinerunName) -o json | jq -r '.status.childReferences[].name')
+          testcases_json='{}'
+          for child_reference in $child_references; do
+            taskrun_status=$(tkn taskrun describe $child_reference -o json | jq -r '.status.conditions[].status')
+            if [[ $taskrun_status == 'Unknown' ]]; then
+              continue
+            fi
+            tkn taskrun logs $child_reference > task_logs.txt
+            testcases_json=$(echo "$testcases_json" | jq --arg name "$child_reference" --arg status "$taskrun_status" --rawfile logs task_logs.txt '. + {($name): {"status": $status, "logs": $logs}}')
+          done
+          echo "$testcases_json" > payload.json
+          python3 /create-junit-file.py payload.json $xmlPath $failFlag
+          ls -lh
+        else
+          echo "no pipelinerun $(params.pipelinerunName) found"
+        fi
+      fi
 
       # Compress
       if [[ $failFlag == 'true' ]]; then
@@ -113,47 +161,59 @@ spec:
       fi
 
       zip "$fileName.zip" *.xml
-      # Import
-      url=$(cat /opt/reportportal-credentials/url)
-      token=$(cat /opt/reportportal-credentials/token)
-      project=$(cat /opt/reportportal-credentials/project)
       description=""
       if [[ $failFlag != 'true' ]]; then
         description="$(params.launch-description)"
       else
         description="$(params.results-id)"
       fi
-      upload=`curl -k -X POST "${url}/api/v1/${project}/launch/import" \
-          -H "accept: */*" -H "Content-Type: multipart/form-data" \
-          -H "Authorization: bearer ${token}" \
-          -F "file=@$fileName.zip" \
-          -F "launchImportRq={
-            \"attributes\": [
-              {
-                \"key\": \"skippedIsNotIssue\",
-                \"system\": true,
-                \"value\": \"true\"
-              }
-            ],
-            \"description\": \"${description}\"
-          };type=application/json"`
-      uuid=`echo ${upload#*= } | cut -d " " -f1`
-      getid=`curl -k -X GET "${url}/api/v1/${project}/launch/uuid/${uuid}" \
-          -H "accept: */*" -H  "Authorization: bearer ${token}"`
-      launchId=`echo $getid | jq .id`
-      if [[ $failFlag != 'true' ]]; then
-        curl -k -X PUT "${url}/api/v1/${project}/launch/${launchId}/update" \
-            -H "accept: */*" -H "Content-Type: application/json" \
+
+      # Import, $1 is the folder holding the reportportal credentials
+      import_launch() {
+        url=$(cat $1/url)
+        token=$(cat $1/token)
+        project=$(cat $1/project)
+        upload=`curl -k -X POST "${url}/api/v1/plugin/${project}/junit/import" \
+            -H "accept: */*" -H "Content-Type: multipart/form-data" \
             -H "Authorization: bearer ${token}" \
-            -d '$(params.launch-attributes)'
+            -F "file=@$fileName.zip" \
+            -F "launchImportRq={
+              \"attributes\": [
+                {
+                  \"key\": \"skippedIsNotIssue\",
+                  \"system\": true,
+                  \"value\": \"true\"
+                }
+              ],
+              \"description\": \"${description}\"
+            };type=application/json"`
+        uuid=${upload#*\"id\":\"}
+        uuid=${uuid%%\"*}
+        getid=`curl -k -X GET "${url}/api/v1/${project}/launch/uuid/${uuid}" \
+            -H "accept: */*" -H  "Authorization: bearer ${token}"`
+        launchId=`echo $getid | jq .id`
+        if [[ $failFlag != 'true' ]]; then
+          curl -k -X PUT "${url}/api/v1/${project}/launch/${launchId}/update" \
+              -H "accept: */*" -H "Content-Type: application/json" \
+              -H "Authorization: bearer ${token}" \
+              -d '$(params.launch-attributes)'
+        fi
+      }
+
+      import_launch /opt/reportportal-credentials
+      # Import to the secondary reportportal only if its secret exists
+      if [ -f /opt/reportportal-secondary-credentials/url ]; then
+        import_launch /opt/reportportal-secondary-credentials
       fi
 
       # delete the folder in pvc
-      path=$(params.results-wsstorage-path)
-      IFS='/' read -ra folder <<< "$path"
-      if [ -d "/opt/storage/$folder" ]; then
-        ls /opt/storage/$folder
-        rm -r /opt/storage/$folder
+      if [[ $(params.remove-PVC-folder) == "true" ]]; then
+        path=$(params.results-wsstorage-path)
+        IFS='/' read -ra folder <<< "$path"
+        if [ -d "/opt/storage/$folder" ]; then
+          ls /opt/storage/$folder
+          rm -r /opt/storage/$folder
+        fi
       fi
 
     resources:      
@@ -166,11 +226,12 @@ spec:
 
   volumes:
     - name: storage
-      description: storage volume where to find the results to be imported
       persistentVolumeClaim:
         claimName: $(params.pvc)
     - name: reportportal-credentials
       secret:
         secretName: $(params.secret-reportportal)
-    
-    
+    - name: reportportal-secondary-credentials
+      secret:
+        secretName: $(params.secret-reportportal-secondary)
+        optional: true
