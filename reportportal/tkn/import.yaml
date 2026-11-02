@@ -188,10 +188,10 @@ spec:
 
     resources:      
       requests:
-        memory: "100Mi"
+        memory: "150Mi"
         cpu: "50m"
       limits:
-        memory: "200Mi"
+        memory: "400Mi"
         cpu: "100m"
 
   volumes:
