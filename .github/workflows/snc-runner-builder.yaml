@@ -37,8 +37,7 @@ jobs:
          
       - name: Create image metadata
         run: |
-          echo ${{ env.image }} > snc-runner-image
-          echo ${{ github.event_name }} > snc-runner-build-event
+          printf '%s\n' "$image" > snc-runner-image
 
       - name: Upload snc-runner
         uses: actions/upload-artifact@v4
@@ -87,6 +86,3 @@ jobs:
         with:
           name: snc-runner-tkn
           path: snc-runner/tkn/*.yaml
-
-      
- 
