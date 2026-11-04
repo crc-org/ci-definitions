@@ -62,6 +62,22 @@ spec:
   - name: remove-PVC-folder
     default: 'true'
     description: Remove the folder in PVC after import to reportportal
+  - name: secret-reportportal-secondary
+    description: |
+      ocp secret holding the secondary report portal credentials. Secret should be accessible to this task.
+      If the secret does not exist the results are only imported to the main report portal.
+
+      ---
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: XXX
+      type: Opaque
+      data:
+        token: XXXX
+        url: XXXX
+        project: XXXX
+    default: reportportal-crc-secondary
 
   steps:
   - name: import
@@ -70,6 +86,8 @@ spec:
     volumeMounts:
       - name: reportportal-credentials
         mountPath: /opt/reportportal-credentials
+      - name: reportportal-secondary-credentials
+        mountPath: /opt/reportportal-secondary-credentials
       - name: storage
         mountPath: /opt/storage
     script: |
@@ -143,37 +161,49 @@ spec:
       fi
 
       zip "$fileName.zip" *.xml
-      # Import (credentials already loaded at start of script)
       description=""
       if [[ $failFlag != 'true' ]]; then
         description="$(params.launch-description)"
       else
         description="$(params.results-id)"
       fi
-      upload=`curl -k -X POST "${url}/api/v1/plugin/${project}/junit/import" \
-          -H "accept: */*" -H "Content-Type: multipart/form-data" \
-          -H "Authorization: bearer ${token}" \
-          -F "file=@$fileName.zip" \
-          -F "launchImportRq={
-            \"attributes\": [
-              {
-                \"key\": \"skippedIsNotIssue\",
-                \"system\": true,
-                \"value\": \"true\"
-              }
-            ],
-            \"description\": \"${description}\"
-          };type=application/json"`
-      uuid=${upload#*\"id\":\"}
-      uuid=${uuid%%\"*}
-      getid=`curl -k -X GET "${url}/api/v1/${project}/launch/uuid/${uuid}" \
-          -H "accept: */*" -H  "Authorization: bearer ${token}"`
-      launchId=`echo $getid | jq .id`
-      if [[ $failFlag != 'true' ]]; then
-        curl -k -X PUT "${url}/api/v1/${project}/launch/${launchId}/update" \
-            -H "accept: */*" -H "Content-Type: application/json" \
+
+      # Import, $1 is the folder holding the reportportal credentials
+      import_launch() {
+        url=$(cat $1/url)
+        token=$(cat $1/token)
+        project=$(cat $1/project)
+        upload=`curl -k -X POST "${url}/api/v1/plugin/${project}/junit/import" \
+            -H "accept: */*" -H "Content-Type: multipart/form-data" \
             -H "Authorization: bearer ${token}" \
-            -d '$(params.launch-attributes)'
+            -F "file=@$fileName.zip" \
+            -F "launchImportRq={
+              \"attributes\": [
+                {
+                  \"key\": \"skippedIsNotIssue\",
+                  \"system\": true,
+                  \"value\": \"true\"
+                }
+              ],
+              \"description\": \"${description}\"
+            };type=application/json"`
+        uuid=${upload#*\"id\":\"}
+        uuid=${uuid%%\"*}
+        getid=`curl -k -X GET "${url}/api/v1/${project}/launch/uuid/${uuid}" \
+            -H "accept: */*" -H  "Authorization: bearer ${token}"`
+        launchId=`echo $getid | jq .id`
+        if [[ $failFlag != 'true' ]]; then
+          curl -k -X PUT "${url}/api/v1/${project}/launch/${launchId}/update" \
+              -H "accept: */*" -H "Content-Type: application/json" \
+              -H "Authorization: bearer ${token}" \
+              -d '$(params.launch-attributes)'
+        fi
+      }
+
+      import_launch /opt/reportportal-credentials
+      # Import to the secondary reportportal only if its secret exists
+      if [ -f /opt/reportportal-secondary-credentials/url ]; then
+        import_launch /opt/reportportal-secondary-credentials
       fi
 
       # delete the folder in pvc
@@ -201,3 +231,7 @@ spec:
     - name: reportportal-credentials
       secret:
         secretName: $(params.secret-reportportal)
+    - name: reportportal-secondary-credentials
+      secret:
+        secretName: $(params.secret-reportportal-secondary)
+        optional: true
