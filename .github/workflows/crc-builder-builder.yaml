@@ -43,8 +43,7 @@ jobs:
 
       - name: Create image metadata
         run: |
-          echo ${{ env.image }} > crc-builder-image
-          echo ${{ github.event_name }} > crc-builder-build-event
+          printf '%s\n' "$image" > crc-builder-image
   
       - name: Upload crc-builder
         uses: actions/upload-artifact@v4
@@ -93,10 +92,3 @@ jobs:
         with:
           name: crc-builder-tkn
           path: crc-builder/tkn/crc-builder*
-
-
-
-
-
-
-     

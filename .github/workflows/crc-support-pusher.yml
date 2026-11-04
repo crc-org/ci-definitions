@@ -9,9 +9,15 @@ on:
 jobs:
   push:
     name: push
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: >-
+      ${{
+        github.event.workflow_run.conclusion == 'success' &&
+        (github.event.workflow_run.event == 'push' ||
+         github.event.workflow_run.event == 'pull_request')
+      }}
     runs-on: ubuntu-24.04
     permissions:
+      actions: read
       contents: read
       packages: write
     steps:
@@ -22,21 +28,44 @@ jobs:
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ github.token }}
 
-      - name: Get crc-support build informaiton
+      - name: Validate crc-support image metadata
+        id: metadata
+        env:
+          SOURCE_EVENT: ${{ github.event.workflow_run.event }}
+          PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
         run: |
-          echo "source_event=$(cat crc-support-build-event)" >> "$GITHUB_ENV"
-          echo "image=$(cat crc-support-image)" >> "$GITHUB_ENV"
+          python3 - <<'PY'
+          import os
+          import re
+          from pathlib import Path
 
-      - name: Log in to ghcr.io
-        if: ${{ env.source_event == 'pull_request' }}
+          if os.environ["SOURCE_EVENT"] == "pull_request":
+              pr_number = os.environ["PR_NUMBER"]
+              if not re.fullmatch(r"[1-9][0-9]*", pr_number):
+                  raise SystemExit("Missing or invalid pull request number")
+              image = f"ghcr.io/crc-org/ci-crc-support:pr-{pr_number}"
+          else:
+              image = Path("crc-support-image").read_text().strip()
+              if not re.fullmatch(
+                  r"quay\.io/crc-org/ci-crc-support:v[0-9A-Za-z][0-9A-Za-z._-]*",
+                  image,
+              ):
+                  raise SystemExit("Unexpected crc-support image reference")
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"image={image}\n")
+          PY
+
+      - name: Log in to ghcr.io for pull requests
+        if: ${{ github.event.workflow_run.event == 'pull_request' }}
         uses: redhat-actions/podman-login@v1
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Log in quay.io
-        if: ${{ env.source_event == 'push' }}
+      - name: Log in to quay.io
+        if: ${{ github.event.workflow_run.event == 'push' }}
         uses: redhat-actions/podman-login@v1
         with:
           registry: quay.io
@@ -44,15 +73,17 @@ jobs:
           password: ${{ secrets.QUAY_IO_PASSWORD }}
 
       - name: Push crc-support
+        env:
+          IMAGE: ${{ steps.metadata.outputs.image }}
         run: |
-          # Load 
-          podman load -i crc-support-linux.tar 
-          podman load -i crc-support-windows.tar 
-          podman load -i crc-support-darwin.tar 
+          # Load
+          podman load -i crc-support-linux.tar
+          podman load -i crc-support-windows.tar
+          podman load -i crc-support-darwin.tar
           # Push
-          podman push ${{ env.image }}-linux
-          podman push ${{ env.image }}-windows
-          podman push ${{ env.image }}-darwin
+          podman push "${IMAGE}-linux"
+          podman push "${IMAGE}-windows"
+          podman push "${IMAGE}-darwin"
 
       - name: Download crc-support-tkn assets
         uses: actions/download-artifact@v4
@@ -64,9 +95,10 @@ jobs:
       - name: Push crc-support-tkn
         env:
           TKN_VERSION: '0.37.0'
+          IMAGE: ${{ steps.metadata.outputs.image }}
         run: |
           curl -LO "https://github.com/tektoncd/cli/releases/download/v${TKN_VERSION}/tkn_${TKN_VERSION}_Linux_x86_64.tar.gz"
           tar xvzf "tkn_${TKN_VERSION}_Linux_x86_64.tar.gz" tkn
-          ./tkn bundle push ${{ env.image }}-tkn \
+          ./tkn bundle push "${IMAGE}-tkn" \
             -f task.yaml \
             -f check-bundle-url.yaml

@@ -35,8 +35,7 @@ jobs:
 
       - name: Create image metadata
         run: |
-          echo ${{ env.image }} > opensearch-image
-          echo ${{ github.event_name }} > opensearch-build-event
+          printf '%s\n' "$image" > opensearch-image
   
       - name: Upload opensearch
         uses: actions/upload-artifact@v4
@@ -60,10 +59,3 @@ jobs:
       - name: Deploy tasks
         run: |
           kubectl apply -f open-search/upload.yaml
-
-
-
-
-
-
-     
