@@ -1,25 +1,27 @@
-FROM registry.access.redhat.com/ubi8/ubi-minimal as preparer
+# MinIO no longer distributes mc binaries (dl.min.io / dl.minio.io answer 410 Gone),
+# so build mc from the archived upstream sources at a pinned release.
+FROM --platform=$BUILDPLATFORM docker.io/library/golang:1.24 as mc-builder
 
 ARG OS
-ENV OS ${OS}
+ARG MC_VERSION=RELEASE.2025-08-13T08-35-41Z
 
-RUN cd /tmp && \ 
-    if [[ ${OS} == 'windows' ]]; then \
-        curl -k -LO https://dl.minio.io/client/mc/release/windows-amd64/mc.exe; \
-    else \
-        curl -k -LO https://dl.min.io/client/mc/release/darwin-amd64/mc; \
-        chmod +x mc; \
-    fi;
-    
+RUN git clone --depth 1 --branch ${MC_VERSION} https://github.com/minio/mc.git /src/mc \
+    && cd /src/mc \
+    && mc_bin=mc \
+    && if [ "${OS}" = 'windows' ]; then mc_bin=mc.exe; fi \
+    && CGO_ENABLED=0 GOOS=${OS} GOARCH=amd64 \
+        go build -trimpath -ldflags "-s -w" -o /out/${mc_bin} . \
+    && chmod +x /out/${mc_bin}
+
 #v0.0.6
 FROM quay.io/devtools-qe-incubator/deliverest:v0.0.7
 
 LABEL org.opencontainers.image.authors="CRCQE <devtools-crc-qe@redhat.com>"
 
-ARG OS 
+ARG OS
 
 ENV ASSETS_FOLDER=/opt/crc-builder \
     OS=${OS}
 
-COPY --from=preparer /tmp/* ${ASSETS_FOLDER}/
+COPY --from=mc-builder /out/* ${ASSETS_FOLDER}/
 COPY lib/${OS}/* ${ASSETS_FOLDER}/

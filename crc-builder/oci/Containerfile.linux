@@ -1,5 +1,19 @@
+# MinIO no longer distributes mc binaries (dl.min.io answers 410 Gone),
+# so build mc from the archived upstream sources at a pinned release.
+# The build runs natively and cross compiles for the target arch.
+FROM --platform=$BUILDPLATFORM docker.io/library/golang:1.24 as mc-builder
+
+ARG TARGETARCH
+ARG MC_VERSION=RELEASE.2025-08-13T08-35-41Z
+
+RUN git clone --depth 1 --branch ${MC_VERSION} https://github.com/minio/mc.git /src/mc \
+    && cd /src/mc \
+    && CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} \
+        go build -trimpath -ldflags "-s -w" -o /out/mc . \
+    && chmod +x /out/mc
+
 #8.10
-FROM quay.io/almalinuxorg/8-minimal@sha256:6c50656775e5971f7fb5e0d0d5b17f246873408a67b571ef720b7c1324118433 
+FROM quay.io/almalinuxorg/8-minimal@sha256:6c50656775e5971f7fb5e0d0d5b17f246873408a67b571ef720b7c1324118433
 
 ARG TARGETARCH
 
@@ -8,13 +22,13 @@ LABEL org.opencontainers.image.authors="CodeReady Containers <devtools-cdk@redha
 ENV GO_VERSION 1.23.1
 
 RUN microdnf -y install git make gcc libvirt-devel perl-Digest-SHA xz findutils diffutils tar \
-    && curl -Lo /tmp/${GO_VERSION}.tar.gz  https://go.dev/dl/go${GO_VERSION}.linux-${TARGETARCH}.tar.gz \
+    && curl -fLo /tmp/${GO_VERSION}.tar.gz  https://go.dev/dl/go${GO_VERSION}.linux-${TARGETARCH}.tar.gz \
     && tar -xzvf /tmp/${GO_VERSION}.tar.gz -C /usr/lib > /dev/null \
     && ln -s /usr/lib/go/bin/go /usr/local/bin/go \
-    && curl -k -Lo /usr/local/bin/mc https://dl.min.io/client/mc/release/linux-${TARGETARCH}/mc \
-    && chmod +x /usr/local/bin/mc \
     && rm /tmp/${GO_VERSION}.tar.gz
-    
+
+COPY --from=mc-builder /out/mc /usr/local/bin/mc
+
 COPY lib/linux/entrypoint.sh /usr/local/bin/entrypoint.sh
 
 ENTRYPOINT entrypoint.sh
