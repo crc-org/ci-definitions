@@ -27,24 +27,25 @@ set -exuo pipefail
 # $1 remote path
 # $2 local path to be uploaded
 s3_upload() {
+    set +x
     [[ -z "${DATALAKE_URL}" || -z "${DATALAKE_ACCESS_KEY}" || -z "${DATALAKE_SECRET_KEY}" ]] \
     && echo "s3 credentials are required, binary can not be updaloaded" \
     && exit 1
 
-    mc alias set datalake \
-        ${DATALAKE_URL} \
-        ${DATALAKE_ACCESS_KEY} \
-        ${DATALAKE_SECRET_KEY} \
-        --api S3v4
+    [[ -z "${DATALAKE_REGION:-}" ]] && echo "DATALAKE_REGION is required" >&2 && exit 1
 
-    # Create bucket if not exits
-    mc mb "datalake/${1}"
-    # Copy files to datalake
-    mc cp "${2}/crc-linux-${GOARCH}.tar.xz" "datalake/${1}/crc-linux-${GOARCH}.tar.xz"
-    mc cp "${2}/sha256sum.txt" "datalake/${1}/crc-linux-${GOARCH}.tar.xz.sha256sum"
+    export RCLONE_CONFIG_DATALAKE_TYPE=s3
+    export RCLONE_CONFIG_DATALAKE_PROVIDER=AWS
+    export RCLONE_CONFIG_DATALAKE_ACCESS_KEY_ID="${DATALAKE_ACCESS_KEY}"
+    export RCLONE_CONFIG_DATALAKE_SECRET_ACCESS_KEY="${DATALAKE_SECRET_KEY}"
+    export RCLONE_CONFIG_DATALAKE_REGION="${DATALAKE_REGION}"
+    if [[ -n "${DATALAKE_URL:-}" && "${DATALAKE_URL%/}" != "https://s3.amazonaws.com" ]]; then
+        export RCLONE_CONFIG_DATALAKE_ENDPOINT="${DATALAKE_URL}"
+    fi
+    set -x
 
-    # Make bucket public
-    # mc anonymous set public "datalake/${1}/"
+    rclone copyto "${2}/crc-linux-${GOARCH}.tar.xz" "datalake:${1}/crc-linux-${GOARCH}.tar.xz"
+    rclone copyto "${2}/sha256sum.txt" "datalake:${1}/crc-linux-${GOARCH}.tar.xz.sha256sum"
 }
 
 #####################

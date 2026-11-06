@@ -42,6 +42,7 @@ spec:
           bucket: ${bucket_value}  
           access-key: ${access_key}
           secret-key: ${secret_key}
+          region: ${region}
     # SCM params
     - name: crc-scm
       default: https://github.com/code-ready/crc.git
@@ -82,6 +83,7 @@ spec:
           DATALAKE_URL=$(cat /opt/s3-credentials/upload-url)
           DATALAKE_ACCESS_KEY=$(cat /opt/s3-credentials/access-key)
           DATALAKE_SECRET_KEY=$(cat /opt/s3-credentials/secret-key)
+          DATALAKE_REGION=$(cat /opt/s3-credentials/region)
           UPLOAD_PATH=$(cat /opt/s3-credentials/bucket)/$(params.s3-folder-path)
             
           # Build installer

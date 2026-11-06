@@ -10,6 +10,7 @@ uploadPath='crc-binaries'
 datalakeURL=''
 datalakeAcessKey=''
 datalakeSecretKey=''
+datalakeRegion=''
 
 while [[ $# -gt 0 ]]; do
     key="$1"
@@ -59,6 +60,11 @@ while [[ $# -gt 0 ]]; do
         shift 
         shift 
         ;;
+        -datalakeRegion)
+        datalakeRegion="$2"
+        shift
+        shift
+        ;;
         *)    # unknown option
         shift 
         ;;
@@ -71,23 +77,24 @@ set -exuo pipefail
 # $1 remote path
 # $2 local path to be uploaded
 s3_upload() {
-    [[ -z "$datalakeURL" || -z "$datalakeAcessKey" || -z "$datalakeSecretKey" ]] \
-    && echo "s3 credentials are required, binary can not be updaloaded" \
-    && exit 1
+    set +x
+    if [[ -z "$datalakeURL" || -z "$datalakeAcessKey" || -z "$datalakeSecretKey" || -z "$datalakeRegion" ]]; then
+        echo "S3 endpoint, region, access key, and secret key are required" >&2
+        exit 1
+    fi
 
-    ./mc alias set datalake \
-        $datalakeURL \
-        $datalakeAcessKey \
-        $datalakeSecretKey \
-        --api S3v4
+    export RCLONE_CONFIG_DATALAKE_TYPE=s3
+    export RCLONE_CONFIG_DATALAKE_PROVIDER=AWS
+    export RCLONE_CONFIG_DATALAKE_ACCESS_KEY_ID="$datalakeAcessKey"
+    export RCLONE_CONFIG_DATALAKE_SECRET_ACCESS_KEY="$datalakeSecretKey"
+    export RCLONE_CONFIG_DATALAKE_REGION="$datalakeRegion"
+    if [[ -n "$datalakeURL" && "${datalakeURL%/}" != "https://s3.amazonaws.com" ]]; then
+        export RCLONE_CONFIG_DATALAKE_ENDPOINT="$datalakeURL"
+    fi
+    set -x
 
-    # Create bucket if not exits
-    ./mc mb "datalake/${1}"
-    # Copy files to datalake
-    ./mc cp "${2}/crc-macos-installer.pkg" "datalake/${1}/crc-macos-installer.pkg"
-    ./mc cp "${2}/crc-macos-installer.sha256sum" "datalake/${1}/crc-macos-installer.pkg.sha256sum"
-    # Make bucket public
-    # ./mc anonymous set public "datalake/${1}/"
+    ./rclone copyto "${2}/crc-macos-installer.pkg" "datalake:${1}/crc-macos-installer.pkg"
+    ./rclone copyto "${2}/crc-macos-installer.sha256sum" "datalake:${1}/crc-macos-installer.pkg.sha256sum"
 }
 
 #####################

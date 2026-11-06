@@ -4,7 +4,7 @@ kind: Task
 metadata:
   name: crc-builder-installer
   labels:
-    app.kubernetes.io/version: "v1.1.2"
+    app.kubernetes.io/version: "v1.1.3"
     redhat.com/product: openshift-local
     dev.lifecycle.io/phase: build
     openshift-local.redhat.com/component: installer
@@ -45,6 +45,7 @@ spec:
           bucket: ${bucket_value}  
           access-key: ${access_key}
           secret-key: ${secret_key}
+          region: ${region}
     - name: host-info
       description: |
         ocp secret holding the hsot info credentials. Secret should be accessible to this task.
@@ -95,8 +96,8 @@ spec:
 
   steps:
     - name: crc-executable-builder
-      # quay.io/crc-org/ci-crc-builder and v1.1.2 values should be passed to the template
-      image: quay.io/crc-org/ci-crc-builder:v1.1.2-$(params.os)
+      # quay.io/crc-org/ci-crc-builder and v1.1.3 values should be passed to the template
+      image: quay.io/crc-org/ci-crc-builder:v1.1.3-$(params.os)
       volumeMounts:
         - name: s3-credentials
           mountPath: /opt/s3-credentials
@@ -135,6 +136,7 @@ spec:
           cmd+="-datalakeURL $(cat /opt/s3-credentials/upload-url) "
           cmd+="-datalakeAcessKey $(cat /opt/s3-credentials/access-key) "
           cmd+="-datalakeSecretKey $(cat /opt/s3-credentials/secret-key) "
+          cmd+="-datalakeRegion $(cat /opt/s3-credentials/region) "
 
           # Exec
           . entrypoint.sh "${cmd}"
