@@ -33,6 +33,7 @@ function S3-Upload($uploadPath, $localPath) {
     $env:RCLONE_CONFIG_DATALAKE_ACCESS_KEY_ID = $datalakeAcessKey
     $env:RCLONE_CONFIG_DATALAKE_SECRET_ACCESS_KEY = $datalakeSecretKey
     $env:RCLONE_CONFIG_DATALAKE_REGION = $datalakeRegion
+    $env:RCLONE_CONFIG_DATALAKE_LOCATION_CONSTRAINT = $datalakeRegion
     if (-not [string]::IsNullOrWhiteSpace($datalakeURL) -and $datalakeURL.TrimEnd('/') -ne "https://s3.amazonaws.com") {
         $env:RCLONE_CONFIG_DATALAKE_ENDPOINT = $datalakeURL
     }

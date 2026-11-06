@@ -88,6 +88,7 @@ s3_upload() {
     export RCLONE_CONFIG_DATALAKE_ACCESS_KEY_ID="$datalakeAcessKey"
     export RCLONE_CONFIG_DATALAKE_SECRET_ACCESS_KEY="$datalakeSecretKey"
     export RCLONE_CONFIG_DATALAKE_REGION="$datalakeRegion"
+    export RCLONE_CONFIG_DATALAKE_LOCATION_CONSTRAINT="$datalakeRegion"
     if [[ -n "$datalakeURL" && "${datalakeURL%/}" != "https://s3.amazonaws.com" ]]; then
         export RCLONE_CONFIG_DATALAKE_ENDPOINT="$datalakeURL"
     fi
