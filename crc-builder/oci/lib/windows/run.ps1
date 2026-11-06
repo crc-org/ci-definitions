@@ -17,6 +17,8 @@ param(
     $datalakeAcessKey,
     [Parameter(Mandatory,HelpMessage='remote s3 credential')]
     $datalakeSecretKey,
+    [Parameter(Mandatory,HelpMessage='AWS S3 region')]
+    $datalakeRegion,
     [Parameter(ValueFromRemainingArguments = $true)]
     $RemainingArgs
 )
@@ -26,20 +28,19 @@ $ErrorActionPreference = "Stop"
 # $1 remote path
 # $2 local path to be uploaded
 function S3-Upload($uploadPath, $localPath) {
-    $env:MC_INSECURE="true"
-    
-    .\mc.exe alias set datalake $datalakeURL `
-        $datalakeAcessKey `
-        $datalakeSecretKey `
-        --api S3v4
+    $env:RCLONE_CONFIG_DATALAKE_TYPE = "s3"
+    $env:RCLONE_CONFIG_DATALAKE_PROVIDER = "AWS"
+    $env:RCLONE_CONFIG_DATALAKE_ACCESS_KEY_ID = $datalakeAcessKey
+    $env:RCLONE_CONFIG_DATALAKE_SECRET_ACCESS_KEY = $datalakeSecretKey
+    $env:RCLONE_CONFIG_DATALAKE_REGION = $datalakeRegion
+    if (-not [string]::IsNullOrWhiteSpace($datalakeURL) -and $datalakeURL.TrimEnd('/') -ne "https://s3.amazonaws.com") {
+        $env:RCLONE_CONFIG_DATALAKE_ENDPOINT = $datalakeURL
+    }
 
-    # Create bucket if not exits
-    .\mc.exe mb "datalake/$uploadPath"
-    # Copy files to datalake
-    .\mc.exe cp "$localPath/crc-windows-installer.zip" "datalake/$uploadPath/crc-windows-installer.zip"
-    .\mc.exe cp "$localPath/crc-windows-installer.zip.sha256sum" "datalake/$uploadPath/crc-windows-installer.zip.sha256sum"
-    # Make bucket public
-    # .\mc.exe anonymous set public "datalake/$uploadPath/"
+    & .\rclone.exe copyto "$localPath/crc-windows-installer.zip" "datalake:$uploadPath/crc-windows-installer.zip"
+    if ($LASTEXITCODE -ne 0) { throw "rclone failed to upload the Windows installer (exit $LASTEXITCODE)" }
+    & .\rclone.exe copyto "$localPath/crc-windows-installer.zip.sha256sum" "datalake:$uploadPath/crc-windows-installer.zip.sha256sum"
+    if ($LASTEXITCODE -ne 0) { throw "rclone failed to upload the Windows installer checksum (exit $LASTEXITCODE)" }
 }
 
 function Get-UploadPath($crcVersion, $crcSCMPR, $crcSCMRef) {

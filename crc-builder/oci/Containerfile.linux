@@ -2,18 +2,30 @@
 FROM quay.io/almalinuxorg/8-minimal@sha256:6c50656775e5971f7fb5e0d0d5b17f246873408a67b571ef720b7c1324118433 
 
 ARG TARGETARCH
+ARG RCLONE_VERSION=1.75.2
 
 LABEL org.opencontainers.image.authors="CodeReady Containers <devtools-cdk@redhat.com>"
 
 ENV GO_VERSION 1.23.1
 
-RUN microdnf -y install git make gcc libvirt-devel perl-Digest-SHA xz findutils diffutils tar \
-    && curl -Lo /tmp/${GO_VERSION}.tar.gz  https://go.dev/dl/go${GO_VERSION}.linux-${TARGETARCH}.tar.gz \
+RUN microdnf -y install git make gcc libvirt-devel perl-Digest-SHA xz findutils diffutils tar unzip \
+    && curl -fsSL -o /tmp/${GO_VERSION}.tar.gz https://go.dev/dl/go${GO_VERSION}.linux-${TARGETARCH}.tar.gz \
     && tar -xzvf /tmp/${GO_VERSION}.tar.gz -C /usr/lib > /dev/null \
     && ln -s /usr/lib/go/bin/go /usr/local/bin/go \
-    && curl -k -Lo /usr/local/bin/mc https://dl.min.io/client/mc/release/linux-${TARGETARCH}/mc \
-    && chmod +x /usr/local/bin/mc \
-    && rm /tmp/${GO_VERSION}.tar.gz
+    && if [ "${TARGETARCH}" = "amd64" ]; then \
+         archive="rclone-v${RCLONE_VERSION}-linux-amd64.zip"; \
+         checksum="349ac8fba6ff65d6247043f1750cdcb518ec5d500ef91463a10d37c0ccdf3702"; \
+       elif [ "${TARGETARCH}" = "arm64" ]; then \
+         archive="rclone-v${RCLONE_VERSION}-linux-arm64.zip"; \
+         checksum="7e1e8d69654941b7b7df84ee74c5f7fb09cce7d5496947fb7bf16b55ff427d10"; \
+       else \
+         printf 'Unsupported TARGETARCH: %s\n' "${TARGETARCH}" >&2; exit 1; \
+       fi \
+    && curl -fsSL "https://downloads.rclone.org/v${RCLONE_VERSION}/${archive}" -o "/tmp/${archive}" \
+    && printf '%s  %s\n' "${checksum}" "/tmp/${archive}" | sha256sum -c - \
+    && unzip -q "/tmp/${archive}" -d /tmp \
+    && install -m 0755 "/tmp/rclone-v${RCLONE_VERSION}-linux-${TARGETARCH}/rclone" /usr/local/bin/rclone \
+    && rm -rf "/tmp/${GO_VERSION}.tar.gz" "/tmp/${archive}" "/tmp/rclone-v${RCLONE_VERSION}-linux-${TARGETARCH}"
     
 COPY lib/linux/entrypoint.sh /usr/local/bin/entrypoint.sh
 

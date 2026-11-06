@@ -51,6 +51,7 @@ spec:
           bucket: ${bucket_value}  
           access-key: ${access_key}
           secret-key: ${secret_key}
+          region: ${region}
     - name: az-credentials
       default: aws-crcqe-bot
       description: |
@@ -125,7 +126,7 @@ spec:
         cmd="mapt azure fedora create --project-name fedora "
         cmd+="--backed-url file://${workspace_path} "
         cmd+="--conn-details-output ${workspace_path} "
-        cmd+="--arch arm64 --cpus $(params.builder-cpus) --memory $(params.builder-memory) --spot --spot-eviction-tolerance low "
+        cmd+="--arch arm64 --cpus $(params.builder-cpus) --memory $(params.builder-memory) --version 43 --spot --spot-eviction-tolerance low "
         eval "${cmd}"
         if [[ $? -ne 0 ]]; then 
           exit 1
@@ -170,6 +171,7 @@ spec:
           cmd+="-e DATALAKE_URL=$(cat /opt/s3-credentials/upload-url) "
           cmd+="-e DATALAKE_ACCESS_KEY=$(cat /opt/s3-credentials/access-key) "
           cmd+="-e DATALAKE_SECRET_KEY=$(cat /opt/s3-credentials/secret-key) "
+          cmd+="-e DATALAKE_REGION=$(cat /opt/s3-credentials/region) "
           if [[ $(params.s3-folder-path) != "" ]]; then
             cmd+="-e UPLOAD_PATH=$(cat /opt/s3-credentials/bucket)/$(params.s3-folder-path) "
           fi

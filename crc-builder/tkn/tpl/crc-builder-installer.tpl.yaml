@@ -45,6 +45,7 @@ spec:
           bucket: ${bucket_value}  
           access-key: ${access_key}
           secret-key: ${secret_key}
+          region: ${region}
     - name: host-info
       description: |
         ocp secret holding the hsot info credentials. Secret should be accessible to this task.
@@ -135,6 +136,7 @@ spec:
           cmd+="-datalakeURL $(cat /opt/s3-credentials/upload-url) "
           cmd+="-datalakeAcessKey $(cat /opt/s3-credentials/access-key) "
           cmd+="-datalakeSecretKey $(cat /opt/s3-credentials/secret-key) "
+          cmd+="-datalakeRegion $(cat /opt/s3-credentials/region) "
 
           # Exec
           . entrypoint.sh "${cmd}"
