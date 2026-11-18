@@ -51,7 +51,7 @@ spec:
     description: debug the task cmds
     default: 'false' 
   - name: upload-log
-    default: 'true'
+    default: 'false'
     description: |
       whether upload the current pipelinerun logs. 
       If true, the task will gather current pipeline-run logs to xml, then upload to reportportal.
