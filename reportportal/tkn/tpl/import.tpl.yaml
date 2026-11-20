@@ -81,20 +81,6 @@ spec:
         set -exuo pipefail
       fi
 
-      if [[ $(params.upload-log) == 'true' ]]; then
-        echo $(params.pipelinerunName)
-        tkn pipelinerun list | grep $(params.pipelinerunName)
-        if [[ $? == 0 ]]; then
-          tkn pipelinerun logs $(params.pipelinerunName) > pipelinerun.log
-          logPath=pipelinerun.log
-          xmlPath=pipelineLog.xml
-          python3 /opt/trans-log-xml.py $logPath $xmlPath
-          ls -lh
-        else 
-          echo "no pipelinerun $(params.pipelinerunName) found"
-        fi
-      fi
-
       failFlag='false'
       
       # remove the xml file if its size is 0 byte
@@ -107,6 +93,28 @@ spec:
         failFlag='true'
       fi
 
+      if [[ $(params.upload-log) == 'true' ]]; then
+        echo $(params.pipelinerunName)
+        tkn pipelinerun list | grep $(params.pipelinerunName)
+        if [[ $? == 0 ]]; then
+          xmlPath=pipelineLog.xml
+          child_references=$(tkn pipelinerun describe $(params.pipelinerunName) -o json | jq -r '.status.childReferences[].name')
+          testcases_json='{}'
+          for child_reference in $child_references; do
+            taskrun_status=$(tkn taskrun describe $child_reference -o json | jq -r '.status.conditions[].status')
+            if [[ $taskrun_status == 'Unknown' ]]; then
+              continue
+            fi
+            tkn taskrun logs $child_reference > task_logs.txt
+            testcases_json=$(echo "$testcases_json" | jq --arg name "$child_reference" --arg status "$taskrun_status" --rawfile logs task_logs.txt '. + {($name): {"status": $status, "logs": $logs}}')
+          done
+          echo "$testcases_json" > payload.json
+          python3 /create-junit-file.py payload.json $xmlPath $failFlag
+          ls -lh
+        else
+          echo "no pipelinerun $(params.pipelinerunName) found"
+        fi
+      fi
 
       # Compress
       if [[ $failFlag == 'true' ]]; then
@@ -116,17 +124,14 @@ spec:
       fi
 
       zip "$fileName.zip" *.xml
-      # Import
-      url=$(cat /opt/reportportal-credentials/url)
-      token=$(cat /opt/reportportal-credentials/token)
-      project=$(cat /opt/reportportal-credentials/project)
+      # Import (credentials already loaded at start of script)
       description=""
       if [[ $failFlag != 'true' ]]; then
         description="$(params.launch-description)"
       else
         description="$(params.results-id)"
       fi
-      upload=`curl -k -X POST "${url}/api/v1/${project}/launch/import" \
+      upload=`curl -k -X POST "${url}/api/v1/plugin/${project}/junit/import" \
           -H "accept: */*" -H "Content-Type: multipart/form-data" \
           -H "Authorization: bearer ${token}" \
           -F "file=@$fileName.zip" \
@@ -140,7 +145,8 @@ spec:
             ],
             \"description\": \"${description}\"
           };type=application/json"`
-      uuid=`echo ${upload#*= } | cut -d " " -f1`
+      uuid=${upload#*\"id\":\"}
+      uuid=${uuid%%\"*}
       getid=`curl -k -X GET "${url}/api/v1/${project}/launch/uuid/${uuid}" \
           -H "accept: */*" -H  "Authorization: bearer ${token}"`
       launchId=`echo $getid | jq .id`
@@ -171,11 +177,8 @@ spec:
 
   volumes:
     - name: storage
-      description: storage volume where to find the results to be imported
       persistentVolumeClaim:
         claimName: $(params.pvc)
     - name: reportportal-credentials
       secret:
         secretName: $(params.secret-reportportal)
-    
-    
