@@ -197,6 +197,7 @@ reportportal-oci-push:
 
 reportportal-tkn-create:
 	$(call tkn_template,$(REPORTPORTAL),$(REPORTPORTAL_V),reportportal,import)
+	$(call tkn_template,$(REPORTPORTAL),$(REPORTPORTAL_V),reportportal,import-oras)
 
 OPENSEARCH_IMAGE ?= $(shell sed -n 1p open-search/release-info)
 OPENSEARCH_VERSION ?= v$(shell sed -n 2p open-search/release-info)
