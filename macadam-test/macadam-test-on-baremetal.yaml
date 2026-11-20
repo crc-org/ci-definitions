@@ -24,6 +24,9 @@ spec:
 
   tasks:
     - name: correlate
+      params:
+        - name: image-url
+          value: $(params.image-url)
       taskSpec:
         description: This task will create some correlate info as base for a execution
         volumes:
@@ -37,6 +40,9 @@ spec:
             description: includes current date
           - name: workspace-resources-path
             description: path created as isolation for an execution within the workspace
+          - name: image-name
+        params:
+          - name: image-url
         steps:
           - name: gather-data
             image: registry.access.redhat.com/ubi8/ubi-minimal
@@ -47,10 +53,15 @@ spec:
               #!/bin/sh
               DATE=$(date +'%Y%m%d')
               CORRELATION="${DATE}-${RANDOM}"
-              
+              url="$(params.image-url)"
+              if [ -z "${url:-}" ]; then
+                url="CentOS-Stream-GenericCloud-10-20250324.0.x86_64.qcow2"
+              fi
+              IMAGE_NAME="${url##*/}"
+
               echo -n "$DATE" > $(results.date.path)
               echo -n "$CORRELATION" > $(results.correlation.path)
-              
+              echo -n "$IMAGE_NAME" > $(results.image-name.path)
               # run path on workspace
               run_path=$CORRELATION
               workspace_path=/opt/storage/${run_path}
@@ -239,9 +250,11 @@ spec:
         resolver: git 
         params:
         - name: url
-          value: https://github.com/crc-org/ci-definitions
+          #value: https://github.com/crc-org/ci-definitions
+          value: https://github.com/lilyLuLiu/ci-definitions
         - name: revision
-          value: main
+          #value: main
+          value: reportportal
         - name: pathInRepo
           value: reportportal/tkn/import.yaml
       params:
@@ -259,7 +272,7 @@ spec:
           value: |
             {"attributes":[{"key":"test-machine","value":"$(params.test-machine)"},{"key":"revision","value":"$(params.revision)"},{"key": "skippedIssue", "value": true}]}
         - name: launch-description
-          value: $(params.image-url)
+          value: $(tasks.correlate.results.image-name)
         - name: pipelinerunName
           value: $(context.pipelineRun.name)
       timeout: "15m"  
