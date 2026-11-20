@@ -59,6 +59,9 @@ spec:
   - name: pipelinerunName
     default: $(context.pipelineRun.name)
     description: the pipelinerun name which log be uploaded to reportportal 
+  - name: remove-PVC-folder
+    default: 'true'
+    description: Remove the folder in PVC after import to reportportal
 
   steps:
   - name: import
@@ -149,11 +152,13 @@ spec:
       fi
 
       # delete the folder in pvc
-      path=$(params.results-wsstorage-path)
-      IFS='/' read -ra folder <<< "$path"
-      if [ -d "/opt/storage/$folder" ]; then
-        ls /opt/storage/$folder
-        rm -r /opt/storage/$folder
+      if [[ $(params.remove-PVC-folder) == "true" ]]; then
+        path=$(params.results-wsstorage-path)
+        IFS='/' read -ra folder <<< "$path"
+        if [ -d "/opt/storage/$folder" ]; then
+          ls /opt/storage/$folder
+          rm -r /opt/storage/$folder
+        fi
       fi
 
     resources:      
