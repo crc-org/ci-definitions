@@ -65,7 +65,8 @@ spec:
   - name: secret-reportportal-secondary
     description: |
       ocp secret holding the secondary report portal credentials. Secret should be accessible to this task.
-      If the secret does not exist the results are only imported to the main report portal.
+      When set, the results are also imported to the secondary report portal.
+      The default 'none' disables the secondary import.
 
       ---
       apiVersion: v1
@@ -77,7 +78,7 @@ spec:
         token: XXXX
         url: XXXX
         project: XXXX
-    default: reportportal-crc-secondary
+    default: 'none'
 
   steps:
   - name: import
