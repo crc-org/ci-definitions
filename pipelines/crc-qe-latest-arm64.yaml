@@ -474,6 +474,8 @@ spec:
       params:
       - name: secret-reportportal
         value: reportportal-crc
+      - name: secret-reportportal-secondary
+        value: reportportal-crc-secondary
       - name: pvc
         value: pipelines-data
       - name: results-id
