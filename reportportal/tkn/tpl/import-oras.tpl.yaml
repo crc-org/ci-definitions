@@ -19,6 +19,7 @@ spec:
   - name: secret-reportportal
     description: |
       ocp secret holding the report portal credentials. Secret should be accessible to this task.
+      The default 'none' has to be overridden with the name of an existing secret.
 
       ---
       apiVersion: v1
@@ -30,7 +31,7 @@ spec:
         token: XXXX
         url: XXXX
         project: XXXX
-    default: reportportal-crc
+    default: 'none'
   - name: oras-address
   - name: results-id
     description: Identifier for the results. Typically will include metadata about the environment or the product

@@ -19,6 +19,7 @@ spec:
   - name: secret-reportportal
     description: |
       ocp secret holding the report portal credentials. Secret should be accessible to this task.
+      The default 'none' disables the import.
 
       ---
       apiVersion: v1
@@ -30,7 +31,7 @@ spec:
         token: XXXX
         url: XXXX
         project: XXXX
-    default: reportportal-crc
+    default: 'none'
   - name: pvc
     description: The persistentVolumeClaim name that contains the xml file to be imported to reportportal
     default: pipelines-data
@@ -106,9 +107,11 @@ spec:
       }
 
       # Load credentials before enabling debug mode
-      url=$(cat /opt/reportportal-credentials/url)
-      token=$(cat /opt/reportportal-credentials/token)
-      project=$(cat /opt/reportportal-credentials/project)
+      if [ -f /opt/reportportal-credentials/url ]; then
+        url=$(cat /opt/reportportal-credentials/url)
+        token=$(cat /opt/reportportal-credentials/token)
+        project=$(cat /opt/reportportal-credentials/project)
+      fi
 
       # If debug add verbosity
       if [[ $(params.debug) == "true" ]]; then
@@ -169,8 +172,13 @@ spec:
         description="$(params.results-id)"
       fi
 
-      # Import, $1 is the folder holding the reportportal credentials
+      # Import, $1 is the folder holding the reportportal credentials, $2 the push name (primary or secondary)
       import_launch() {
+        if [ ! -f $1/url ]; then
+          echo "Skipping reportportal import, credentials not available for $2 push"
+          return 0
+        fi
+        echo "Importing results to reportportal for $2 push"
         url=$(cat $1/url)
         token=$(cat $1/token)
         project=$(cat $1/project)
@@ -201,11 +209,8 @@ spec:
         fi
       }
 
-      import_launch /opt/reportportal-credentials
-      # Import to the secondary reportportal only if its secret exists
-      if [ -f /opt/reportportal-secondary-credentials/url ]; then
-        import_launch /opt/reportportal-secondary-credentials
-      fi
+      import_launch /opt/reportportal-credentials primary
+      import_launch /opt/reportportal-secondary-credentials secondary
 
       # delete the folder in pvc
       if [[ $(params.remove-PVC-folder) == "true" ]]; then
@@ -232,6 +237,7 @@ spec:
     - name: reportportal-credentials
       secret:
         secretName: $(params.secret-reportportal)
+        optional: true
     - name: reportportal-secondary-credentials
       secret:
         secretName: $(params.secret-reportportal-secondary)
