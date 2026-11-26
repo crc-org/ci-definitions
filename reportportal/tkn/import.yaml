@@ -106,19 +106,28 @@ spec:
         fi
       }
 
-      # Load credentials before enabling debug mode
-      if [ -f /opt/reportportal-credentials/url ]; then
-        url=$(cat /opt/reportportal-credentials/url)
-        token=$(cat /opt/reportportal-credentials/token)
-        project=$(cat /opt/reportportal-credentials/project)
-      fi
-
-      # If debug add verbosity
-      if [[ $(params.debug) == "true" ]]; then
-        echo "ReportPortal credentials (masked):"
+      # Print masked ReportPortal credentials, $1 is the folder holding the
+      # reportportal credentials, $2 the push name (primary or secondary).
+      print_credentials() {
+        local url token project
+        if [ ! -f "$1/url" ]; then
+          echo "ReportPortal $2 credentials not defined"
+          return 0
+        fi
+        url=$(cat "$1/url")
+        token=$(cat "$1/token")
+        project=$(cat "$1/project")
+        echo "ReportPortal $2 credentials (masked):"
         echo "  url=${url}"
         echo "  project=${project}"
         echo "  token=$(mask_credential "$token")"
+      }
+
+      # If debug add verbosity. Credentials are read before 'set -x' is
+      # enabled so their values are not leaked by the shell trace.
+      if [[ $(params.debug) == "true" ]]; then
+        print_credentials /opt/reportportal-credentials primary
+        print_credentials /opt/reportportal-secondary-credentials secondary
         set -exuo pipefail
       fi
 
@@ -174,14 +183,20 @@ spec:
 
       # Import, $1 is the folder holding the reportportal credentials, $2 the push name (primary or secondary)
       import_launch() {
-        if [ ! -f $1/url ]; then
+        if [ ! -f "$1/url" ]; then
           echo "Skipping reportportal import, credentials not available for $2 push"
           return 0
         fi
+        # Do not expose secret values in xtrace output. Restore tracing after
+        # all credential-dependent commands have completed.
+        local xtrace_enabled=false
+        case "$-" in
+          *x*) xtrace_enabled=true; set +x ;;
+        esac
         echo "Importing results to reportportal for $2 push"
-        url=$(cat $1/url)
-        token=$(cat $1/token)
-        project=$(cat $1/project)
+        url=$(cat "$1/url")
+        token=$(cat "$1/token")
+        project=$(cat "$1/project")
         upload=`curl -k -X POST "${url}/api/v1/plugin/${project}/junit/import" \
             -H "accept: */*" -H "Content-Type: multipart/form-data" \
             -H "Authorization: bearer ${token}" \
@@ -206,6 +221,9 @@ spec:
               -H "accept: */*" -H "Content-Type: application/json" \
               -H "Authorization: bearer ${token}" \
               -d '$(params.launch-attributes)'
+        fi
+        if [ "$xtrace_enabled" = true ]; then
+          set -x
         fi
       }
 
